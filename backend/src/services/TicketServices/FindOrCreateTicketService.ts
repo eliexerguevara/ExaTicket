@@ -55,10 +55,13 @@ const FindOrCreateTicketService = async (
     });
 
     if (ticket) {
+      // Reset AI so it answers again on the new contact attempt
       await ticket.update({
         status: "pending",
         userId: null,
-        unreadMessages
+        unreadMessages,
+        aiActive: true,
+        aiAttempts: 0
       });
     }
   }

@@ -701,10 +701,7 @@ const MessageInput = ({ ticketStatus }) => {
           </Hidden>
           <div className={classes.messageInputWrapper}>
             <InputBase
-              inputRef={input => {
-                input && input.focus();
-                input && (inputRef.current = input);
-              }}
+              inputRef={inputRef}
               className={classes.messageInput}
               placeholder={
                 ticketStatus === "open"
