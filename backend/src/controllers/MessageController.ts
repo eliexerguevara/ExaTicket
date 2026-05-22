@@ -12,7 +12,7 @@ import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessag
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import { getAgentAdvice } from "../services/AIServices/GetAIResponse";
-import toastError from "../errors/toastError";
+import { logger } from "../utils/logger";
 
 type IndexQuery = {
   pageNumber: string;
@@ -110,7 +110,7 @@ export const agentAsk = async (
 
     return res.json({ response });
   } catch (err) {
-    toastError(err);
+    logger.error(err, "Error in agentAsk endpoint");
     return res.status(500).json({ error: "Error al consultar a la IA" });
   }
 };
