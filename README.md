@@ -15,6 +15,10 @@ El frontend es una aplicación de chat multiusuario construida con React y Mater
 - Múltiples usuarios atendiendo el mismo número de WhatsApp
 - Conexión a múltiples cuentas de WhatsApp en un solo lugar
 - **Chat IA de soporte técnico** — la IA atiende primero y escala al operador cuando es necesario
+- **Enrutamiento IA por departamento** — la IA pregunta el área (Administración / Ventas / Soporte) antes de actuar
+- **Adaptación de lenguaje automática** — la IA detecta si el cliente es técnico o no y ajusta el registro de respuesta
+- **Nota interna automática al escalar** — al transferir a un humano la IA genera un resumen del caso visible solo para agentes
+- **Consulta directa al asistente IA** — los agentes pueden preguntarle a la IA sobre cualquier ticket desde el chat
 - Escalado automático al operador humano (por solicitud del usuario, decisión de la IA o límite de intentos)
 - Creación y gestión de tickets desde el navegador
 - Envío y recepción de mensajes, imágenes, audio y documentos
@@ -212,9 +216,9 @@ El backend espera automáticamente a que MySQL esté saludable (`healthcheck`) a
 
 ## Configurar el Chat IA
 
-La IA responde automáticamente al primer mensaje de cada ticket e intenta resolver el problema antes de pasarlo a un operador.
+La IA responde automáticamente al primer mensaje de cada ticket e intenta resolver el problema antes de pasarlo a un operador humano. Usa el modelo **Claude Haiku** (Anthropic) por su velocidad y bajo costo.
 
-**Pasos para activarlo:**
+### Activación rápida
 
 1. Obtén tu API Key en [console.anthropic.com](https://console.anthropic.com)
 2. Agrégala al `.env`:
@@ -227,16 +231,114 @@ La IA responde automáticamente al primer mensaje de cada ticket e intenta resol
    ```
 4. En la aplicación ve a **Configuración → IA de Soporte Técnico**
 5. Cambia el estado a **Habilitado**
-6. Personaliza el **Prompt del sistema** (instrucciones para la IA)
-7. Personaliza el **Mensaje de escalado** (lo que dice la IA al transferir)
+6. Personaliza el **Prompt del sistema** y el **Mensaje de escalado**
 
-**Cuándo escala al operador humano:**
+---
 
-| Trigger | Ejemplo |
+### Flujo de atención IA
+
+```
+Cliente escribe → IA pregunta departamento (Administración / Ventas / Soporte)
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+    Administración   Ventas      Soporte técnico
+    (cola directa) (cola directa)  │
+                                   ▼
+                             IA detecta nivel técnico
+                             del cliente y adapta lenguaje
+                                   │
+                          ┌────────┴────────┐
+                          ▼                 ▼
+                    Resuelto OK       No resuelto / [ESCALAR]
+                                           │
+                                    Nota interna IA
+                                    + Transferir agente
+```
+
+---
+
+### Adaptación automática de lenguaje
+
+La IA analiza el vocabulario del cliente y ajusta su registro:
+
+| Cliente usa... | IA responde con... |
 |---|---|
-| Usuario lo pide | "quiero hablar con un agente", "necesito un operador", "persona real" |
-| IA no puede resolver | La IA responde internamente con marcador `[ESCALAR]` |
-| Límite de intentos | Por defecto 10 mensajes (configurable en Ajustes) |
+| Términos técnicos: `IP`, `DNS`, `firmware`, `ONT`, `latencia`, `PPPoE` | Lenguaje técnico directo |
+| Lenguaje cotidiano: "no funciona el wifi", "el aparato parpadeando" | Lenguaje muy sencillo, paso a paso. Ej: *"Busca el aparato negro con lucecitas, desenchúfalo 30 segundos y vuelve a enchufarlo."* |
+
+Esto se configura desde el **Prompt del sistema** en Ajustes. El prompt guardado en base de datos tiene prioridad sobre el fallback del código.
+
+---
+
+### Cuándo escala al operador humano
+
+| Trigger | Descripción |
+|---|---|
+| Usuario lo pide | "quiero hablar con un agente", "necesito un operador", "persona real", "human agent" |
+| IA no puede resolver | La IA incluye el marcador interno `[ESCALAR]` en su respuesta |
+| Límite de intentos | Por defecto 10 mensajes (configurable en Ajustes → `aiMaxAttempts`) |
+| Departamento sin cola | Si Administración o Ventas no tienen cola configurada |
+
+Al escalar, la IA:
+1. Envía el mensaje de escalado al cliente (configurable en `aiEscalationMessage`)
+2. Genera automáticamente una **nota interna** con un resumen del caso para el agente
+3. Desactiva el modo IA en el ticket (`aiActive = false`)
+4. Asigna el ticket a la cola de Soporte si estaba sin cola
+
+---
+
+### Notas internas IA
+
+Cuando la IA escala un ticket, guarda automáticamente una nota privada visible solo para los agentes (nunca se envía al cliente):
+
+```
+*Resumen IA del caso:*
+Cliente reporta que su router no conecta desde ayer. El bot verificó
+los LEDs del equipo y sugirió reinicio. El problema persiste —
+posible falla en el PoE o en la antena del nodo.
+```
+
+Las notas internas aparecen en el chat con fondo ámbar y el badge **"Nota interna IA"** para distinguirlas visualmente.
+
+---
+
+### Consulta directa al asistente IA (modo agente)
+
+Los agentes pueden preguntarle a la IA directamente desde el chat de cualquier ticket usando el botón 🤖 en la barra de entrada de mensajes.
+
+**Cómo usarlo:**
+1. Abre un ticket
+2. Haz clic en el ícono 🤖 (robot) en la barra inferior
+3. Escribe tu pregunta técnica, por ejemplo: *"¿podría estar el router desconfigurado?"*
+4. La IA responde como nota interna usando todo el historial del ticket como contexto
+
+**La IA analiza y aconseja sobre:**
+- Nivel técnico del cliente (para que el agente sepa cómo comunicarse)
+- Router desconfigurado: IP asignada, DNS, reset de fábrica, canal WiFi, WPA2
+- Sin internet: LEDs del modem/ONT, PPPoE credentials, cable UTP, estado de la zona
+- Velocidad lenta: speedtest cable vs WiFi, interferencias 2.4GHz, QoS
+- Intermitencia: potencia óptica (-8 a -27 dBm), temperatura, empalmes, splitter
+- Configuración manual: APN, DNS, gateway, MTU (1492 para PPPoE)
+
+La respuesta queda guardada como nota interna en el ticket para referencia futura.
+
+**Endpoint API:**
+```
+POST /api/messages/:ticketId/agent-ai
+Body: { "question": "¿podría estar el router desconfigurado?" }
+```
+
+---
+
+### Configuración desde base de datos (Settings)
+
+| Clave | Descripción | Valor por defecto |
+|---|---|---|
+| `aiEnabled` | `"enabled"` o `"disabled"` | `disabled` |
+| `aiSystemPrompt` | Instrucciones para la IA | Prompt ISP con adaptación de lenguaje |
+| `aiEscalationMessage` | Mensaje al transferir al humano | *"Voy a conectarte con un agente ahora."* |
+| `aiMaxAttempts` | Máximo de mensajes antes de escalar | `10` |
 
 Cuando hay un ticket siendo atendido por la IA, aparece un badge morado **"IA"** en la lista de tickets. El operador puede tomar control haciendo clic en el botón **"Tomar control"**.
 
@@ -403,38 +505,69 @@ docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
 ```
 ExaTicket/
-├── backend/                          # API Node.js + TypeScript
+├── backend/                              # API Node.js + TypeScript
 │   ├── src/
-│   │   ├── config/auth.ts            # JWT secrets requeridos (no hardcoded)
+│   │   ├── config/auth.ts                # JWT secrets requeridos (no hardcoded)
+│   │   ├── controllers/
+│   │   │   └── MessageController.ts      # +agentAsk: consulta agente→IA
+│   │   ├── routes/
+│   │   │   └── messageRoutes.ts          # POST /messages/:id/agent-ai
 │   │   ├── services/
 │   │   │   └── AIServices/
-│   │   │       └── GetAIResponse.ts  # Integración Claude Haiku
+│   │   │       └── GetAIResponse.ts      # getAIResponse · getAgentAdvice · getTicketSummary
 │   │   ├── handlers/
-│   │   │   └── handleWhatsappEvents.ts  # Lógica IA + escalado
+│   │   │   └── handleWhatsappEvents.ts   # Flujo IA: enrutamiento → soporte → escalado
 │   │   ├── models/
-│   │   │   └── Ticket.ts             # Campos aiActive, aiAttempts
+│   │   │   ├── Ticket.ts                 # Campos aiActive, aiAttempts
+│   │   │   └── Message.ts                # Campo isInternal (notas privadas)
 │   │   └── database/
 │   │       ├── migrations/
-│   │       │   └── 20260521000000-add-ai-fields-to-tickets.ts
+│   │       │   ├── 20260521000000-add-ai-fields-to-tickets.ts
+│   │       │   └── 20260522100000-add-isInternal-to-messages.ts
 │   │       └── seeds/
 │   │           └── 20260521000000-add-ai-settings.ts
-│   └── Dockerfile                    # Node.js 18 + Chrome
-├── frontend/                         # React + Material UI + Vite
+│   └── Dockerfile                        # Node.js 18 + Chrome
+├── frontend/                             # React + Material UI + Vite
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── TicketActionButtons/  # Botón "Tomar control" IA
-│   │   │   └── TicketListItem/       # Badge IA en lista tickets
-│   │   └── pages/Settings/           # Panel configuración IA
+│   │   │   ├── MessagesList/             # Renderizado de notas internas IA (fondo ámbar)
+│   │   │   ├── MessageInput/             # Botón 🤖 + panel consulta agente→IA
+│   │   │   ├── TicketActionButtons/      # Botón "Tomar control" IA
+│   │   │   └── TicketListItem/           # Badge IA en lista tickets
+│   │   └── pages/Settings/               # Panel configuración IA
 │   ├── .docker/
-│   │   ├── nginx/                    # Configuración nginx
-│   │   └── add-env-vars.sh           # Inyección VITE_* en runtime
-│   └── Dockerfile                    # Node.js 18-alpine + nginx
-├── ssl/                              # Certificados SSL (no en git)
-├── .docker/data/                     # Datos MySQL (no en git)
-├── docker-compose.yaml               # Orquestación completa
-├── .env.example                      # Plantilla de variables
+│   │   ├── nginx/                        # Configuración nginx
+│   │   └── add-env-vars.sh               # Inyección VITE_* en runtime
+│   └── Dockerfile                        # Node.js 18-alpine + nginx
+├── ssl/                                  # Certificados SSL (no en git)
+├── .docker/data/                         # Datos MySQL (no en git)
+├── docker-compose.yaml                   # Orquestación completa
+├── .env.example                          # Plantilla de variables
 └── README.md
 ```
+
+---
+
+## Historial de cambios
+
+### v1.3.0 — 2026-05-22
+- **Adaptación automática de lenguaje**: la IA detecta el nivel técnico del cliente y ajusta su vocabulario (técnico ↔ sencillo)
+- **Consulta agente→IA**: botón 🤖 en la barra de mensajes — el agente escribe una pregunta y la IA responde como nota interna usando el historial del ticket
+- **Nota interna automática al escalar**: cuando la IA transfiere a un humano genera un resumen del caso (visible solo para agentes, fondo ámbar en el chat)
+- **Campo `isInternal` en Messages**: distingue notas privadas de mensajes enviados al cliente
+- **Diagnósticos ISP en modo agente**: router desconfigurado, sin internet, velocidad lenta, intermitencia, configuración manual
+
+### v1.2.0 — 2026-05-21
+- **Enrutamiento por departamento**: la IA pregunta el área (Administración / Ventas / Soporte técnico) antes de actuar
+- **Palabras clave de escalado en múltiples idiomas**: español e inglés
+- **Escalado automático a cola Soporte** al transferir al humano
+- **Botón "Lupa" de previsualización** de conversación antes de aceptar ticket
+
+### v1.1.0 — 2026-05-20
+- **Chat IA de primera respuesta** con Claude Haiku (Anthropic)
+- Configuración desde panel de ajustes: prompt, mensaje de escalado, máximo de intentos
+- Badge IA morado en lista de tickets
+- Botón "Tomar control" para que el agente deshabilite la IA en un ticket
 
 ---
 

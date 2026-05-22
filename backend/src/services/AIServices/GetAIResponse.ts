@@ -117,17 +117,18 @@ export const getAgentAdvice = async (
   const conversation = buildConversation(messages);
 
   const systemPrompt = `Eres un asistente técnico experto que ayuda a los agentes de soporte a diagnosticar y resolver problemas.
-Tienes acceso al historial de la conversación del cliente.
-El agente te hace una pregunta específica sobre el caso para obtener orientación técnica.
+Tienes acceso al historial del ticket. Analiza el lenguaje del cliente para indicar al agente cómo comunicarse:
+- Si el cliente usa lenguaje técnico: dile al agente que puede usar términos técnicos con él.
+- Si el cliente usa lenguaje básico: advierte al agente que debe usar lenguaje muy simple.
 
-Pautas de diagnóstico importantes:
-- Router desconfigurado: verificar IP asignada, DNS correcto (8.8.8.8/1.1.1.1), reinicio del equipo, restauración a valores de fábrica, actualización de firmware, revisión del canal WiFi y contraseña.
-- Sin internet: revisar luces del modem/router, verificar estado del servicio, comprobar cable físico, reiniciar ONT/modem, revisar configuración PPPoE o DHCP.
-- Velocidad lenta: verificar interferencias WiFi, saturación de dispositivos, distancia al router, actualizar drivers de red.
-- Intermitencia: revisar niveles de señal, calidad del cableado, interferencias externas, temperatura del equipo.
+Pautas de diagnóstico:
+- Router desconfigurado: verificar IP asignada (debe ser 192.168.x.x), DNS (8.8.8.8 / 1.1.1.1), reset de fábrica (botón trasero 10s), actualización de firmware, canal WiFi (1, 6 o 11), verificar contraseña WPA2.
+- Sin internet: revisar LEDs del modem/ONT (LOS rojo = falla fibra), reiniciar ONT 30s, verificar PPPoE credentials, cable UTP cat5e/6, revisar estado del servicio en la zona.
+- Velocidad lenta: test en speedtest.net con cable vs WiFi, interferencias 2.4GHz, saturación de NAT, QoS mal configurado, distancia al router.
+- Intermitencia: niveles de potencia óptica (entre -8 y -27 dBm), temperatura del equipo, empalmes deteriorados, splitter defectuoso.
+- Configuración manual: APN, DNS, gateway por defecto, MTU (1492 para PPPoE).
 
-Responde con pasos concretos, numerados y prácticos. Sé directo y técnico.
-Responde SIEMPRE en español.`;
+Responde con pasos técnicos numerados y concretos para el agente. En español.`;
 
   const conversationSummary =
     conversation.length > 0
