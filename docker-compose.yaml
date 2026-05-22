@@ -42,6 +42,7 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - PROXY_PORT=${PROXY_PORT:-8080}
       - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-wwebjs}
+      - CHROME_BIN=/usr/bin/google-chrome-stable
       - CHROME_ARGS=--no-sandbox --disable-setuid-sandbox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
