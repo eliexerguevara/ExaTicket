@@ -1,6 +1,33 @@
+# Datos generados en runtime
 .docker/data/
-ssl/
+ssl/certs/
+ssl/www/
+
+# Secretos — NUNCA commitear
 .env
-.wwebjs_auth
-.wwebjs_cache
+.env.local
+.env.production
+
+# WhatsApp session
+.wwebjs_auth/
+.wwebjs_cache/
+backend/.wwebjs_auth/
+
+# Dependencias
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Build outputs
+frontend/build/
+backend/dist/
+
+# Editor / IDE
 .idea
+.vscode/settings.json
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
