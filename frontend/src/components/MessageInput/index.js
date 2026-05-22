@@ -19,12 +19,16 @@ import ClearIcon from "@material-ui/icons/Clear";
 import MicIcon from "@material-ui/icons/Mic";
 import CheckCircleOutlineIcon from "@material-ui/icons/CheckCircleOutline";
 import HighlightOffIcon from "@material-ui/icons/HighlightOff";
+import { Android } from "@material-ui/icons";
 import {
   FormControlLabel,
   Hidden,
   Menu,
   MenuItem,
   Switch,
+  Tooltip,
+  Collapse,
+  InputBase as MuiInputBase,
 } from "@material-ui/core";
 import ClickAwayListener from "@material-ui/core/ClickAwayListener";
 
@@ -211,6 +215,34 @@ const useStyles = makeStyles(theme => ({
       },
     },
   },
+
+  // ── AI question panel ────────────────────────────────────────────────────
+  aiPanel: {
+    display: "flex",
+    alignItems: "center",
+    width: "100%",
+    padding: "6px 12px",
+    backgroundColor: "#f5f3ff",
+    borderTop: "1px solid #ddd6fe",
+    gap: 6,
+  },
+
+  aiPanelInput: {
+    flex: 1,
+    background: "#fff",
+    border: "1px solid #c4b5fd",
+    borderRadius: 16,
+    padding: "4px 12px",
+    fontSize: "0.85em",
+  },
+
+  aiSendBtn: {
+    color: "#7c3aed",
+  },
+
+  aiIconActive: {
+    color: "#7c3aed",
+  },
 }));
 
 const MessageInput = ({ ticketStatus }) => {
@@ -231,6 +263,12 @@ const MessageInput = ({ ticketStatus }) => {
   const { user } = useContext(AuthContext);
 
   const [signMessage, setSignMessage] = useLocalStorage("signOption", true);
+
+  // AI question panel state
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [aiQuestion, setAIQuestion] = useState("");
+  const [aiLoading, setAILoading] = useState(false);
+  const aiInputRef = useRef();
 
   useEffect(() => {
     inputRef.current.focus();
@@ -400,6 +438,28 @@ const MessageInput = ({ ticketStatus }) => {
     }
   };
 
+  const handleToggleAIPanel = () => {
+    setShowAIPanel(prev => {
+      if (!prev) setTimeout(() => aiInputRef.current && aiInputRef.current.focus(), 80);
+      return !prev;
+    });
+    setAIQuestion("");
+  };
+
+  const handleAIQuestion = async () => {
+    if (!aiQuestion.trim()) return;
+    setAILoading(true);
+    try {
+      await api.post(`/messages/${ticketId}/agent-ai`, { question: aiQuestion.trim() });
+      setAIQuestion("");
+      setShowAIPanel(false);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setAILoading(false);
+    }
+  };
+
   const handleOpenMenuClick = event => {
     setAnchorEl(event.currentTarget);
   };
@@ -473,8 +533,53 @@ const MessageInput = ({ ticketStatus }) => {
     return (
       <Paper square elevation={0} className={classes.mainWrapper}>
         {replyingMessage && renderReplyingMessage(replyingMessage)}
+
+        {/* AI Question Panel */}
+        <Collapse in={showAIPanel} style={{ width: "100%" }}>
+          <div className={classes.aiPanel}>
+            <Android style={{ fontSize: 18, color: "#7c3aed", flexShrink: 0 }} />
+            <InputBase
+              inputRef={aiInputRef}
+              className={classes.aiPanelInput}
+              placeholder="Pregunta a la IA sobre este caso..."
+              value={aiQuestion}
+              onChange={e => setAIQuestion(e.target.value)}
+              disabled={aiLoading}
+              onKeyPress={e => {
+                if (e.key === "Enter" && !e.shiftKey) handleAIQuestion();
+              }}
+              fullWidth
+            />
+            <IconButton
+              size="small"
+              disabled={aiLoading || !aiQuestion.trim()}
+              onClick={handleAIQuestion}
+              className={classes.aiSendBtn}
+            >
+              {aiLoading
+                ? <CircularProgress size={18} style={{ color: "#7c3aed" }} />
+                : <SendIcon fontSize="small" />}
+            </IconButton>
+            <IconButton size="small" onClick={handleToggleAIPanel}>
+              <ClearIcon fontSize="small" />
+            </IconButton>
+          </div>
+        </Collapse>
+
         <div className={classes.newMessageBox}>
           <Hidden only={["sm", "xs"]}>
+            <Tooltip title="Consultar a la IA">
+              <span>
+                <IconButton
+                  aria-label="askAI"
+                  component="span"
+                  disabled={loading || recording || ticketStatus !== "open"}
+                  onClick={handleToggleAIPanel}
+                >
+                  <Android className={showAIPanel ? classes.aiIconActive : classes.sendMessageIcons} />
+                </IconButton>
+              </span>
+            </Tooltip>
             <IconButton
               aria-label="emojiPicker"
               component="span"

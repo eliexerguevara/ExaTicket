@@ -23,7 +23,7 @@ import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTi
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import CreateContactService from "../services/ContactServices/CreateContactService";
-import { getAIResponse } from "../services/AIServices/GetAIResponse";
+import { getAIResponse, getTicketSummary } from "../services/AIServices/GetAIResponse";
 import CheckSettings from "../helpers/CheckSettings";
 
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
@@ -313,6 +313,28 @@ const escalateToHuman = async (
     );
   } catch (err) {
     logger.error(err, "Error sending escalation message");
+  }
+
+  // Generate and save internal AI summary note for the agent
+  try {
+    const summary = await getTicketSummary(ticket.id);
+    if (summary) {
+      const noteId = `internal-${ticket.id}-${Date.now()}`;
+      await CreateMessageService({
+        messageData: {
+          id: noteId,
+          ticketId: ticket.id,
+          body: `*Resumen IA del caso:*\n${summary}`,
+          fromMe: true,
+          read: true,
+          isInternal: true,
+          ack: 2
+        }
+      });
+      logger.debug(`Internal AI note created for ticket ${ticket.id}`);
+    }
+  } catch (err) {
+    logger.error(err, "Error creating internal AI summary note");
   }
 };
 

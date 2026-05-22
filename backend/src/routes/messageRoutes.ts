@@ -20,4 +20,11 @@ messageRoutes.post(
 
 messageRoutes.delete("/messages/:messageId", isAuth, MessageController.remove);
 
+// Agent asks AI for advice about a ticket (creates internal note)
+messageRoutes.post(
+  "/messages/:ticketId/agent-ai",
+  isAuth,
+  MessageController.agentAsk
+);
+
 export default messageRoutes;

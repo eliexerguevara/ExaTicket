@@ -27,6 +27,7 @@ import LocationPreview from "../LocationPreview";
 import ModalImageCors from "../ModalImageCors";
 import MessageOptionsMenu from "../MessageOptionsMenu";
 import whatsBackground from "../../assets/wa-background.png";
+import { Android } from "@material-ui/icons";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -258,6 +259,47 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "center",
     backgroundColor: "inherit",
     padding: 10,
+  },
+
+  // ── Internal AI note ──────────────────────────────────────────────────────
+  messageInternal: {
+    alignSelf: "center",
+    maxWidth: 580,
+    width: "88%",
+    marginTop: 10,
+    marginBottom: 10,
+    backgroundColor: "#fffbeb",
+    border: "1px dashed #f59e0b",
+    borderRadius: 8,
+    padding: "8px 14px 10px",
+    position: "relative",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  },
+
+  internalBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    color: "#b45309",
+    fontSize: "0.7em",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 5,
+  },
+
+  internalBody: {
+    fontSize: "0.85em",
+    color: "#374151",
+    lineHeight: 1.5,
+  },
+
+  internalTime: {
+    fontSize: "0.68em",
+    color: "#9ca3af",
+    marginTop: 4,
+    textAlign: "right",
   },
 }));
 
@@ -590,9 +632,30 @@ const MessagesList = ({ ticketId, isGroup }) => {
     );
   };
 
+  const renderInternalMessage = (message, index) => (
+    <React.Fragment key={message.id}>
+      {renderDailyTimestamps(message, index)}
+      <div className={classes.messageInternal}>
+        <div className={classes.internalBadge}>
+          <Android style={{ fontSize: 13 }} />
+          Nota interna IA
+        </div>
+        <div className={classes.internalBody}>
+          <MarkdownWrapper>{message.body}</MarkdownWrapper>
+        </div>
+        <div className={classes.internalTime}>
+          {format(parseISO(message.createdAt), "HH:mm")}
+        </div>
+      </div>
+    </React.Fragment>
+  );
+
   const renderMessages = () => {
     if (messagesList.length > 0) {
       const viewMessagesList = messagesList.map((message, index) => {
+        if (message.isInternal) {
+          return renderInternalMessage(message, index);
+        }
         if (!message.fromMe) {
           return (
             <React.Fragment key={message.id}>

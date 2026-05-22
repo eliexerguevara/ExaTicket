@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { Request, Response } from "express";
 
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
@@ -5,10 +6,13 @@ import { getIO } from "../libs/socket";
 import Message from "../models/Message";
 
 import ListMessagesService from "../services/MessageServices/ListMessagesService";
+import CreateMessageService from "../services/MessageServices/CreateMessageService";
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
+import { getAgentAdvice } from "../services/AIServices/GetAIResponse";
+import toastError from "../errors/toastError";
 
 type IndexQuery = {
   pageNumber: string;
@@ -72,4 +76,41 @@ export const remove = async (
   });
 
   return res.send();
+};
+
+// ─── Agent asks AI about a ticket ─────────────────────────────────────────────
+
+export const agentAsk = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { question } = req.body as { question: string };
+
+  if (!question || !question.trim()) {
+    return res.status(400).json({ error: "La pregunta no puede estar vacía" });
+  }
+
+  try {
+    const { response } = await getAgentAdvice(Number(ticketId), question.trim());
+
+    // Save as an internal message so it's visible in the ticket chat
+    const noteId = `agent-ai-${ticketId}-${randomBytes(6).toString("hex")}`;
+    await CreateMessageService({
+      messageData: {
+        id: noteId,
+        ticketId: Number(ticketId),
+        body: `*Pregunta agente:* ${question.trim()}\n\n*Respuesta IA:*\n${response}`,
+        fromMe: true,
+        read: true,
+        isInternal: true,
+        ack: 2
+      }
+    });
+
+    return res.json({ response });
+  } catch (err) {
+    toastError(err);
+    return res.status(500).json({ error: "Error al consultar a la IA" });
+  }
 };

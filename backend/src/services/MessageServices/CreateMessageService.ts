@@ -14,6 +14,7 @@ export interface MessageData {
   mediaUrl?: string;
   ack?: number;
   quotedMsgId?: string;
+  isInternal?: boolean;
 }
 interface Request {
   messageData: MessageData;
