@@ -284,14 +284,20 @@ const escalateToHuman = async (
 ): Promise<void> => {
   logger.info(`Escalating ticket ${ticket.id} to human operator. Reason: ${reason}`);
 
-  let escalationMsg = "Voy a transferirte con un agente. Por favor espera.";
+  let escalationMsg = "Voy a conectarte con un agente ahora. Un momento por favor.";
   try {
     escalationMsg = await CheckSettings("aiEscalationMessage");
   } catch {
     // use default
   }
 
-  await ticket.update({ aiActive: false });
+  // Assign to Soporte queue so agents can see it
+  const supportQueue = await findQueueByName("oporte");
+  const updateData: { aiActive: boolean; queueId?: number } = { aiActive: false };
+  if (supportQueue && !ticket.queueId) {
+    updateData.queueId = supportQueue.id;
+  }
+  await ticket.update(updateData);
 
   const io = getIO();
   io.to("notification").to(ticket.status).emit("ticket", {
