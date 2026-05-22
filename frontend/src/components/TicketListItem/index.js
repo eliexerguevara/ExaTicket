@@ -13,6 +13,16 @@ import Typography from "@material-ui/core/Typography";
 import Avatar from "@material-ui/core/Avatar";
 import Divider from "@material-ui/core/Divider";
 import Badge from "@material-ui/core/Badge";
+import Dialog from "@material-ui/core/Dialog";
+import DialogTitle from "@material-ui/core/DialogTitle";
+import DialogContent from "@material-ui/core/DialogContent";
+import DialogActions from "@material-ui/core/DialogActions";
+import IconButton from "@material-ui/core/IconButton";
+import CircularProgress from "@material-ui/core/CircularProgress";
+import Button from "@material-ui/core/Button";
+import SearchIcon from "@material-ui/icons/Search";
+import CloseIcon from "@material-ui/icons/Close";
+import CheckCircleOutlineIcon from "@material-ui/icons/CheckCircleOutline";
 
 import { i18n } from "../../translate/i18n";
 
@@ -87,9 +97,23 @@ const useStyles = makeStyles(theme => ({
 		backgroundColor: green[500],
 	},
 
-	acceptButton: {
+	pendingButtons: {
 		position: "absolute",
 		left: "50%",
+		transform: "translateX(-50%)",
+		display: "flex",
+		alignItems: "center",
+		gap: 4,
+	},
+
+	previewBtn: {
+		padding: 4,
+		color: theme.palette.primary.main,
+		border: `1px solid ${theme.palette.primary.main}`,
+		borderRadius: 4,
+		"&:hover": {
+			backgroundColor: theme.palette.primary.main + "14",
+		},
 	},
 
 	ticketQueueColor: {
@@ -115,6 +139,7 @@ const useStyles = makeStyles(theme => ({
 		borderRadius: 10,
 		fontSize: "0.9em"
 	},
+
 	aiTag: {
 		position: "absolute",
 		marginRight: 5,
@@ -132,6 +157,78 @@ const useStyles = makeStyles(theme => ({
 		alignItems: "center",
 		gap: 2,
 	},
+
+	// ── Preview dialog ─────────────────────────────────────────
+	previewDialogTitle: {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingBottom: 4,
+	},
+
+	previewContactInfo: {
+		display: "flex",
+		alignItems: "center",
+		gap: 10,
+	},
+
+	previewQueue: {
+		fontSize: "0.75em",
+		color: theme.palette.text.secondary,
+		marginTop: 2,
+	},
+
+	previewMessagesBox: {
+		display: "flex",
+		flexDirection: "column",
+		gap: 6,
+		minHeight: 120,
+		maxHeight: 340,
+		overflowY: "auto",
+		padding: "8px 4px",
+	},
+
+	previewBubble: {
+		maxWidth: "78%",
+		padding: "6px 10px",
+		borderRadius: 8,
+		fontSize: "0.85em",
+		lineHeight: 1.4,
+		wordBreak: "break-word",
+	},
+
+	previewBubbleFromMe: {
+		alignSelf: "flex-end",
+		backgroundColor: "#dcf8c6",
+		color: "#222",
+	},
+
+	previewBubbleFromUser: {
+		alignSelf: "flex-start",
+		backgroundColor: theme.palette.type === "dark" ? "#374151" : "#f0f0f0",
+		color: theme.palette.text.primary,
+	},
+
+	previewBubbleTime: {
+		fontSize: "0.7em",
+		color: "#888",
+		marginTop: 2,
+		textAlign: "right",
+	},
+
+	previewLoading: {
+		display: "flex",
+		justifyContent: "center",
+		alignItems: "center",
+		height: 120,
+	},
+
+	previewEmpty: {
+		textAlign: "center",
+		color: theme.palette.text.secondary,
+		padding: "20px 0",
+		fontSize: "0.85em",
+	},
 }));
 
 const TicketListItem = ({ ticket }) => {
@@ -141,6 +238,11 @@ const TicketListItem = ({ ticket }) => {
 	const { ticketId } = useParams();
 	const isMounted = useRef(true);
 	const { user } = useContext(AuthContext);
+
+	// Preview dialog state
+	const [previewOpen, setPreviewOpen] = useState(false);
+	const [previewMessages, setPreviewMessages] = useState([]);
+	const [previewLoading, setPreviewLoading] = useState(false);
 
 	useEffect(() => {
 		return () => {
@@ -167,6 +269,35 @@ const TicketListItem = ({ ticket }) => {
 
 	const handleSelectTicket = id => {
 		history.push(`/tickets/${id}`);
+	};
+
+	const handleOpenPreview = async e => {
+		e.stopPropagation();
+		setPreviewOpen(true);
+		setPreviewLoading(true);
+		try {
+			const { data } = await api.get(`/messages/${ticket.id}`, {
+				params: { pageNumber: 1 },
+			});
+			if (isMounted.current) {
+				setPreviewMessages(data.messages || []);
+			}
+		} catch (err) {
+			toastError(err);
+		} finally {
+			if (isMounted.current) setPreviewLoading(false);
+		}
+	};
+
+	const handleClosePreview = e => {
+		if (e) e.stopPropagation();
+		setPreviewOpen(false);
+	};
+
+	const handleAcceptFromPreview = async e => {
+		e.stopPropagation();
+		setPreviewOpen(false);
+		await handleAcepptTicket(ticket.id);
 	};
 
 	return (
@@ -268,19 +399,111 @@ const TicketListItem = ({ ticket }) => {
 						</span>
 					}
 				/>
+
 				{ticket.status === "pending" && (
+					<div className={classes.pendingButtons}>
+						<Tooltip title="Ver conversación">
+							<IconButton
+								size="small"
+								className={classes.previewBtn}
+								onClick={handleOpenPreview}
+							>
+								<SearchIcon fontSize="small" />
+							</IconButton>
+						</Tooltip>
+						<ButtonWithSpinner
+							color="primary"
+							variant="contained"
+							size="small"
+							loading={loading}
+							onClick={e => {
+								e.stopPropagation();
+								handleAcepptTicket(ticket.id);
+							}}
+						>
+							{i18n.t("ticketsList.buttons.accept")}
+						</ButtonWithSpinner>
+					</div>
+				)}
+			</ListItem>
+
+			{/* ── Preview Dialog ── */}
+			<Dialog
+				open={previewOpen}
+				onClose={handleClosePreview}
+				maxWidth="sm"
+				fullWidth
+				onClick={e => e.stopPropagation()}
+			>
+				<DialogTitle disableTypography className={classes.previewDialogTitle}>
+					<div className={classes.previewContactInfo}>
+						<Avatar
+							src={ticket?.contact?.profilePicUrl}
+							style={{ width: 36, height: 36 }}
+						/>
+						<div>
+							<Typography variant="subtitle1" style={{ fontWeight: 600, lineHeight: 1.2 }}>
+								{ticket.contact.name}
+							</Typography>
+							{ticket.queue && (
+								<Typography className={classes.previewQueue}>
+									{ticket.queue.name}
+								</Typography>
+							)}
+						</div>
+					</div>
+					<IconButton size="small" onClick={handleClosePreview}>
+						<CloseIcon fontSize="small" />
+					</IconButton>
+				</DialogTitle>
+
+				<DialogContent dividers style={{ padding: "8px 12px" }}>
+					{previewLoading ? (
+						<div className={classes.previewLoading}>
+							<CircularProgress size={28} />
+						</div>
+					) : previewMessages.length === 0 ? (
+						<Typography className={classes.previewEmpty}>
+							Sin mensajes aún.
+						</Typography>
+					) : (
+						<div className={classes.previewMessagesBox}>
+							{previewMessages.map(msg => (
+								<div key={msg.id}>
+									<div
+										className={clsx(classes.previewBubble, {
+											[classes.previewBubbleFromMe]: msg.fromMe,
+											[classes.previewBubbleFromUser]: !msg.fromMe,
+										})}
+									>
+										<MarkdownWrapper>{msg.body}</MarkdownWrapper>
+										<div className={classes.previewBubbleTime}>
+											{format(parseISO(msg.createdAt), "HH:mm")}
+										</div>
+									</div>
+								</div>
+							))}
+						</div>
+					)}
+				</DialogContent>
+
+				<DialogActions style={{ padding: "8px 16px", gap: 8 }}>
+					<Button onClick={handleClosePreview} size="small">
+						Cerrar
+					</Button>
 					<ButtonWithSpinner
 						color="primary"
 						variant="contained"
-						className={classes.acceptButton}
 						size="small"
 						loading={loading}
-						onClick={e => handleAcepptTicket(ticket.id)}
+						onClick={handleAcceptFromPreview}
+						startIcon={<CheckCircleOutlineIcon />}
 					>
 						{i18n.t("ticketsList.buttons.accept")}
 					</ButtonWithSpinner>
-				)}
-			</ListItem>
+				</DialogActions>
+			</Dialog>
+
 			<Divider variant="inset" component="li" />
 		</React.Fragment>
 	);
