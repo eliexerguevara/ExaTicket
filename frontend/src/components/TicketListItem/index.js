@@ -98,12 +98,10 @@ const useStyles = makeStyles(theme => ({
 	},
 
 	pendingButtons: {
-		position: "absolute",
-		left: "50%",
-		transform: "translateX(-50%)",
 		display: "flex",
 		alignItems: "center",
-		gap: 4,
+		gap: 6,
+		paddingTop: 2,
 	},
 
 	previewBtn: {
@@ -375,56 +373,58 @@ const TicketListItem = ({ ticket }) => {
 					}
 					secondary={
 						<span className={classes.contactNameWrapper}>
-							<Typography
-								className={classes.contactLastMessage}
-								noWrap
-								component="span"
-								variant="body2"
-								color="textSecondary"
-							>
-								{ticket.lastMessage ? (
-									<MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>
-								) : (
-									<br />
-								)}
-							</Typography>
+							{ticket.status === "pending" ? (
+								<span className={classes.pendingButtons}>
+									<Tooltip title="Ver conversación">
+										<IconButton
+											size="small"
+											className={classes.previewBtn}
+											onClick={handleOpenPreview}
+										>
+											<SearchIcon fontSize="small" />
+										</IconButton>
+									</Tooltip>
+									<ButtonWithSpinner
+										color="primary"
+										variant="contained"
+										size="small"
+										loading={loading}
+										onClick={e => {
+											e.stopPropagation();
+											handleAcepptTicket(ticket.id);
+										}}
+									>
+										{i18n.t("ticketsList.buttons.accept")}
+									</ButtonWithSpinner>
+								</span>
+							) : (
+								<>
+									<Typography
+										className={classes.contactLastMessage}
+										noWrap
+										component="span"
+										variant="body2"
+										color="textSecondary"
+									>
+										{ticket.lastMessage ? (
+											<MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>
+										) : (
+											<br />
+										)}
+									</Typography>
 
-							<Badge
-								className={classes.newMessagesCount}
-								badgeContent={ticket.unreadMessages}
-								classes={{
-									badge: classes.badgeStyle,
-								}}
-							/>
+									<Badge
+										className={classes.newMessagesCount}
+										badgeContent={ticket.unreadMessages}
+										classes={{
+											badge: classes.badgeStyle,
+										}}
+									/>
+								</>
+							)}
 						</span>
 					}
 				/>
-
-				{ticket.status === "pending" && (
-					<div className={classes.pendingButtons}>
-						<Tooltip title="Ver conversación">
-							<IconButton
-								size="small"
-								className={classes.previewBtn}
-								onClick={handleOpenPreview}
-							>
-								<SearchIcon fontSize="small" />
-							</IconButton>
-						</Tooltip>
-						<ButtonWithSpinner
-							color="primary"
-							variant="contained"
-							size="small"
-							loading={loading}
-							onClick={e => {
-								e.stopPropagation();
-								handleAcepptTicket(ticket.id);
-							}}
-						>
-							{i18n.t("ticketsList.buttons.accept")}
-						</ButtonWithSpinner>
-					</div>
-				)}
 			</ListItem>
 
 			{/* ── Preview Dialog ── */}
