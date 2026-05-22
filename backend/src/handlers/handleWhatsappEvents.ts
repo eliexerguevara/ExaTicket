@@ -9,7 +9,9 @@ import { logger } from "../utils/logger";
 import { debounce } from "../helpers/Debounce";
 import formatBody from "../helpers/Mustache";
 
+import { Op } from "sequelize";
 import Contact from "../models/Contact";
+import Queue from "../models/Queue";
 import Ticket from "../models/Ticket";
 import Message from "../models/Message";
 
@@ -203,6 +205,60 @@ const handleQueueLogic = async (
   }
 };
 
+// ─── Routing constants ────────────────────────────────────────────────────────
+
+const AI_ROUTING_QUESTION =
+  "¡Hola! 👋 ¿Con qué departamento deseas comunicarte?\n\n" +
+  "*1* - Administración\n" +
+  "*2* - Ventas\n" +
+  "*3* - Soporte técnico";
+
+const AI_ROUTING_INVALID =
+  "Por favor responde *1*, *2* o *3*:\n\n" +
+  "*1* - Administración\n" +
+  "*2* - Ventas\n" +
+  "*3* - Soporte técnico";
+
+/** Normalize accents and lowercase for comparison */
+const normalize = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+
+type RoutingChoice = "administracion" | "ventas" | "soporte" | null;
+
+const parseRoutingChoice = (body: string): RoutingChoice => {
+  const t = normalize(body);
+
+  if (t === "1" || t.includes("admin")) return "administracion";
+  if (t === "2" || t.includes("venta")) return "ventas";
+  if (
+    t === "3" ||
+    t.includes("soporte") ||
+    t.includes("tecnico") ||
+    t.includes("ayuda") ||
+    t.includes("internet") ||
+    t.includes("fibra") ||
+    t.includes("antena") ||
+    t.includes("wifi") ||
+    t.includes("tele") ||
+    t.includes("cable") ||
+    t.includes("luz") ||
+    t.includes("router")
+  )
+    return "soporte";
+
+  return null;
+};
+
+/** Find a queue whose name contains the given keyword (case-insensitive) */
+const findQueueByName = async (keyword: string): Promise<Queue | null> =>
+  Queue.findOne({ where: { name: { [Op.like]: `%${keyword}%` } } });
+
+// ─── Human-request keywords ────────────────────────────────────────────────────
+
 const HUMAN_REQUEST_KEYWORDS = [
   "quiero hablar con",
   "necesito un operador",
@@ -254,22 +310,93 @@ const escalateToHuman = async (
   }
 };
 
+const sendMsg = async (
+  whatsappId: number,
+  contactNumber: string,
+  text: string
+): Promise<void> => {
+  try {
+    await whatsappProvider.sendMessage(
+      whatsappId,
+      `${contactNumber}@c.us`,
+      text
+    );
+  } catch (err) {
+    logger.error(err, "Error sending message");
+  }
+};
+
 const handleAISupport = async (
   ticket: Ticket,
   messageBody: string,
   whatsappId: number,
   contactNumber: string
 ): Promise<void> => {
+  // Always allow user to request a human agent
   const lowerBody = messageBody.toLowerCase();
   const userWantsHuman = HUMAN_REQUEST_KEYWORDS.some(kw =>
     lowerBody.includes(kw)
   );
-
   if (userWantsHuman) {
     await escalateToHuman(ticket, whatsappId, contactNumber, "user_request");
     return;
   }
 
+  // ── PHASE 1: First contact — send department routing question ──────────────
+  if (ticket.aiAttempts === 0) {
+    await sendMsg(whatsappId, contactNumber, AI_ROUTING_QUESTION);
+    await ticket.update({ aiAttempts: 1 });
+    return;
+  }
+
+  // ── PHASE 2: Process department selection ─────────────────────────────────
+  if (ticket.aiAttempts === 1) {
+    const choice = parseRoutingChoice(messageBody);
+
+    // Route to Administración or Ventas queue
+    if (choice === "administracion" || choice === "ventas") {
+      const keyword = choice === "administracion" ? "dmin" : "enta"; // matches "Administración" / "Ventas"
+      const queue = await findQueueByName(keyword);
+
+      if (queue) {
+        await UpdateTicketService({
+          ticketData: { queueId: queue.id, aiActive: false },
+          ticketId: ticket.id
+        });
+        await sendMsg(
+          whatsappId,
+          contactNumber,
+          `Un momento, te conectamos con ${queue.name}. 🙏`
+        );
+      } else {
+        // Queue not configured — send to any available operator
+        await escalateToHuman(
+          ticket,
+          whatsappId,
+          contactNumber,
+          "queue_not_found"
+        );
+      }
+      return;
+    }
+
+    // Route to AI support
+    if (choice === "soporte") {
+      await ticket.update({ aiAttempts: 2 });
+      await sendMsg(
+        whatsappId,
+        contactNumber,
+        "Con gusto te ayudo. ¿Cuál es el problema?"
+      );
+      return;
+    }
+
+    // Unrecognized response — ask again
+    await sendMsg(whatsappId, contactNumber, AI_ROUTING_INVALID);
+    return;
+  }
+
+  // ── PHASE 3: AI-driven support (aiAttempts >= 2) ───────────────────────────
   let maxAttempts = 10;
   try {
     maxAttempts = parseInt(await CheckSettings("aiMaxAttempts"), 10) || 10;
@@ -296,26 +423,14 @@ const handleAISupport = async (
 
   if (shouldEscalate) {
     if (response) {
-      try {
-        await whatsappProvider.sendMessage(
-          whatsappId,
-          `${contactNumber}@c.us`,
-          response
-        );
-      } catch (err) {
-        logger.error(err, "Error sending AI escalation message");
-      }
+      await sendMsg(whatsappId, contactNumber, response);
     }
     await escalateToHuman(ticket, whatsappId, contactNumber, "ai_decision");
     return;
   }
 
   if (response) {
-    await whatsappProvider.sendMessage(
-      whatsappId,
-      `${contactNumber}@c.us`,
-      response
-    );
+    await sendMsg(whatsappId, contactNumber, response);
   }
 
   await ticket.update({ aiAttempts: ticket.aiAttempts + 1 });
@@ -398,12 +513,18 @@ export const handleMessage = async (
 
     await processVcardMessage(messagePayload);
 
+    // Resolve AI state once, reused for both queue-logic and AI-support checks
+    const aiEnabled = await CheckSettings("aiEnabled").catch(() => "disabled");
+    const aiIsActive = aiEnabled === "enabled" && ticket.aiActive;
+
+    // Skip legacy queue-selection logic when AI is handling routing
     if (
       !ticket.queue &&
       !contextPayload.groupContact &&
       !messagePayload.fromMe &&
       !ticket.userId &&
-      whatsapp.queues.length >= 1
+      whatsapp.queues.length >= 1 &&
+      !aiIsActive
     ) {
       await handleQueueLogic(
         contextPayload.whatsappId,
@@ -415,8 +536,7 @@ export const handleMessage = async (
 
     if (!messagePayload.fromMe && !contextPayload.groupContact) {
       try {
-        const aiEnabled = await CheckSettings("aiEnabled").catch(() => "disabled");
-        if (aiEnabled === "enabled" && ticket.aiActive) {
+        if (aiIsActive) {
           await handleAISupport(
             ticket,
             messagePayload.body,

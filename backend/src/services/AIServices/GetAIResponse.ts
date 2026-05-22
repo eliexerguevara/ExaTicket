@@ -58,14 +58,14 @@ export const getAIResponse = async (
 
   const fullSystem = `${systemPrompt}
 
-INSTRUCCIÓN CRÍTICA: Cuando no puedas resolver el problema del usuario o cuando el caso requiera intervención humana, escribe exactamente "${ESCALATION_MARKER}" al comienzo de tu respuesta, seguido del mensaje explicando que lo transferirás con un agente.
+INSTRUCCIÓN CRÍTICA: Cuando no puedas resolver el problema o el caso requiera un técnico, escribe exactamente "${ESCALATION_MARKER}" al inicio de tu respuesta seguido de un mensaje breve.
 
-Responde siempre en el mismo idioma que el usuario. Sé conciso y profesional.`;
+Responde siempre en español, de forma corta y directa.`;
 
   try {
     const result = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+      max_tokens: 300,
       system: [
         {
           type: "text",
