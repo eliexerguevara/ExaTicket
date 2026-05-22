@@ -68,6 +68,8 @@ const FindOrCreateTicketService = async (
       contactId: groupContact ? groupContact.id : contact.id,
       status: "pending",
       isGroup: !!groupContact,
+      // AI only for individual chats, never for group chats
+      aiActive: !groupContact,
       unreadMessages,
       whatsappId
     });
