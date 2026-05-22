@@ -24,21 +24,41 @@ El frontend es una aplicación de chat multiusuario construida con React y Mater
 
 ---
 
-## Cómo funciona
+## Requisitos previos
 
-Cada mensaje nuevo recibido en un WhatsApp conectado crea un ticket. La IA responde automáticamente al usuario intentando resolver el problema. Si la IA no puede resolverlo (o el usuario lo solicita), el ticket se transfiere a un operador humano.
+- [Docker](https://docs.docker.com/get-docker/) >= 20.x
+- [Docker Compose](https://docs.docker.com/compose/install/) >= 2.x (plugin integrado con Docker)
+- Git
+- Mínimo 2 GB RAM (recomendado 4 GB — el build de Chrome requiere memoria)
+- Mínimo 8 GB de espacio en disco (las imágenes Docker ocupan ~6 GB)
 
-Los tickets pueden gestionarse desde la página **Tickets**, donde los operadores pueden aceptarlos, responder y resolverlos.
+### Instalación de Docker en Ubuntu
+
+```bash
+# Agregar repositorio oficial de Docker
+apt-get update
+apt-get install -y curl ca-certificates gnupg lsb-release
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+
+# Instalar Docker y Docker Compose plugin
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Iniciar y habilitar Docker
+systemctl enable docker
+systemctl start docker
+
+# Verificar instalación
+docker --version
+docker compose version
+```
 
 ---
 
-## Instalación con Docker (Recomendado)
-
-### Requisitos previos
-
-- [Docker](https://docs.docker.com/get-docker/) >= 20.x
-- [Docker Compose](https://docs.docker.com/compose/install/) >= 2.x
-- Git
+## Instalación con Docker
 
 ### 1. Clonar el repositorio
 
@@ -51,9 +71,10 @@ cd ExaTicket
 
 ```bash
 cp .env.example .env
+nano .env
 ```
 
-Editar el archivo `.env` con los valores reales:
+Llenar el archivo `.env` con los valores correspondientes:
 
 ```bash
 # ============================================================
@@ -61,107 +82,167 @@ Editar el archivo `.env` con los valores reales:
 # ============================================================
 MYSQL_ENGINE=mariadb
 MYSQL_VERSION=10.6
-MYSQL_ROOT_PASSWORD=tu_password_seguro     # OBLIGATORIO — cámbialo
+MYSQL_ROOT_PASSWORD=tu_password_muy_seguro    # OBLIGATORIO — cámbialo
 MYSQL_DATABASE=whaticket
 MYSQL_PORT=3306
-TZ=America/Bogota
+TZ=America/Bogota                             # Ajusta tu zona horaria
 
 # ============================================================
 # BACKEND
 # ============================================================
 BACKEND_PORT=8080
-BACKEND_SERVER_NAME=                       # ej: api.tudominio.com (vacío para localhost)
-BACKEND_URL=http://localhost               # Usa https:// en producción
-PROXY_PORT=8080                            # 443 si usas HTTPS con proxy inverso
+BACKEND_SERVER_NAME=                          # ej: api.tudominio.com (vacío = localhost)
+BACKEND_URL=http://IP_DEL_SERVIDOR            # IP pública o dominio
+PROXY_PORT=8080                               # Cambiar a 443 si usas HTTPS
 
-# Genera con: openssl rand -hex 32
-JWT_SECRET=                                # OBLIGATORIO
-JWT_REFRESH_SECRET=                        # OBLIGATORIO
+# OBLIGATORIO — generar con: openssl rand -hex 32
+JWT_SECRET=
+JWT_REFRESH_SECRET=
 
-# Proveedor de WhatsApp: wwebjs (Puppeteer) o whaileys (Baileys)
-WHATSAPP_PROVIDER=wwebjs
+WHATSAPP_PROVIDER=wwebjs                      # wwebjs (Puppeteer) o whaileys (Baileys)
+LOG_LEVEL=info
 
 # ============================================================
 # FRONTEND
 # ============================================================
 FRONTEND_PORT=3000
 FRONTEND_SSL_PORT=3001
-FRONTEND_SERVER_NAME=                      # ej: app.tudominio.com (vacío para localhost)
-FRONTEND_URL=http://localhost:3000
+FRONTEND_SERVER_NAME=                         # ej: app.tudominio.com (vacío = localhost)
+FRONTEND_URL=http://IP_DEL_SERVIDOR:3000
 
 # ============================================================
 # IA DE SOPORTE (opcional — dejar vacío para deshabilitar)
 # ============================================================
-ANTHROPIC_API_KEY=                         # Obtén en https://console.anthropic.com
+ANTHROPIC_API_KEY=                            # Obtén en https://console.anthropic.com
+
+# ============================================================
+# PHPMYADMIN
+# ============================================================
+PMA_PORT=9000
 ```
 
 **Generar JWT secrets seguros:**
 
 ```bash
 # En Linux/Mac:
-openssl rand -hex 32
+openssl rand -hex 32   # copiar el resultado en JWT_SECRET
+openssl rand -hex 32   # copiar el resultado en JWT_REFRESH_SECRET
 
 # En Windows (PowerShell):
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+[System.BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).Replace("-","").ToLower()
 ```
 
-### 3. Construir e iniciar los contenedores
+### 3. Crear directorios necesarios
 
 ```bash
-docker compose up -d --build
+mkdir -p ssl/certs/backend ssl/certs/frontend ssl/www
+mkdir -p .docker/data
+mkdir -p backend/.wwebjs_auth
+mkdir -p backend/public
 ```
 
-Esto levanta los siguientes servicios:
+### 4. Construir e iniciar los contenedores
 
-| Servicio     | Puerto por defecto | Descripción                    |
-|--------------|--------------------|-------------------------------|
-| Frontend     | 3000               | Interfaz web (nginx)          |
-| Backend      | 8080               | API REST + WebSockets         |
-| MySQL/MariaDB| 3306               | Base de datos                 |
-| phpMyAdmin   | 9000               | Administrador de base de datos|
+> **Importante:** El primer build tarda entre **20 y 40 minutos** porque descarga Node.js 18, instala Google Chrome y compila el proyecto. Las siguientes veces usa caché y es mucho más rápido.
 
-> El backend espera automáticamente a que MySQL esté listo antes de iniciar (healthcheck configurado).
+```bash
+docker compose up --build -d
+```
 
-### 4. Verificar que todo esté funcionando
+Puedes seguir el progreso con:
 
 ```bash
 docker compose logs -f backend
 ```
 
-Deberías ver: `Server started on port...`
+Espera hasta ver esta línea antes de continuar:
 
-### 5. Acceso inicial
+```
+{"msg":"Server started on port: 3000"}
+```
 
-- **Aplicación:** http://localhost:3000
-- **phpMyAdmin:** http://localhost:9000
+### 5. Ejecutar seeds (solo la primera vez)
 
-**Credenciales por defecto:**
-- Usuario: `admin@whaticket.com`
-- Contraseña: `admin`
+**Este paso es obligatorio** para crear el usuario administrador y la configuración inicial:
 
-> Cambia la contraseña inmediatamente después del primer inicio de sesión.
+```bash
+docker exec exaticket-backend-1 npx sequelize db:seed:all
+```
+
+Deberías ver:
+
+```
+== 20200904070004-create-default-users: migrated
+== 20200904070004-create-default-settings: migrated
+== 20200904070006-create-apiToken-settings: migrated
+== 20260521000000-add-ai-settings: migrated
+```
+
+### 6. Acceder a la aplicación
+
+| Servicio | URL | Puerto |
+|---|---|---|
+| **Aplicación** | http://IP_DEL_SERVIDOR:3000 | 3000 |
+| **API Backend** | http://IP_DEL_SERVIDOR:8080 | 8080 |
+| **phpMyAdmin** | http://IP_DEL_SERVIDOR:9000 | 9000 |
+
+**Credenciales iniciales:**
+
+| Campo | Valor |
+|---|---|
+| Email | `admin@whaticket.com` |
+| Contraseña | `admin` |
+
+> **Cambia la contraseña de admin inmediatamente** en: Configuración → Usuarios → Editar.
+
+---
+
+## Servicios Docker
+
+| Contenedor | Imagen | Descripción |
+|---|---|---|
+| `exaticket-backend-1` | Node.js 18 + Chrome | API REST + WebSockets + WhatsApp |
+| `exaticket-frontend-1` | nginx:alpine | Interfaz web React |
+| `exaticket-mysql-1` | mariadb:10.6 | Base de datos |
+| `exaticket-phpmyadmin-1` | phpmyadmin | Administrador de base de datos |
+
+El backend espera automáticamente a que MySQL esté saludable (`healthcheck`) antes de iniciar. Las migraciones se ejecutan solas al arrancar.
 
 ---
 
 ## Configurar el Chat IA
 
-Una vez que la app esté corriendo:
+La IA responde automáticamente al primer mensaje de cada ticket e intenta resolver el problema antes de pasarlo a un operador.
+
+**Pasos para activarlo:**
 
 1. Obtén tu API Key en [console.anthropic.com](https://console.anthropic.com)
-2. Agrégala al `.env`: `ANTHROPIC_API_KEY=sk-ant-...`
-3. Reinicia el backend: `docker compose restart backend`
-4. En la app, ve a **Configuración → IA de Soporte Técnico**
+2. Agrégala al `.env`:
+   ```bash
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+3. Reinicia el backend:
+   ```bash
+   docker compose restart backend
+   ```
+4. En la aplicación ve a **Configuración → IA de Soporte Técnico**
 5. Cambia el estado a **Habilitado**
-6. Personaliza el prompt del sistema y el mensaje de escalado
+6. Personaliza el **Prompt del sistema** (instrucciones para la IA)
+7. Personaliza el **Mensaje de escalado** (lo que dice la IA al transferir)
 
-**Triggers de escalado al operador humano:**
-- El usuario escribe frases como *"quiero hablar con un agente"*, *"necesito un operador"*, etc.
-- La IA decide que no puede resolver el problema (responde con marcador interno `[ESCALAR]`)
-- Se alcanza el límite máximo de intentos configurado (por defecto: 10)
+**Cuándo escala al operador humano:**
+
+| Trigger | Ejemplo |
+|---|---|
+| Usuario lo pide | "quiero hablar con un agente", "necesito un operador", "persona real" |
+| IA no puede resolver | La IA responde internamente con marcador `[ESCALAR]` |
+| Límite de intentos | Por defecto 10 mensajes (configurable en Ajustes) |
+
+Cuando hay un ticket siendo atendido por la IA, aparece un badge morado **"IA"** en la lista de tickets. El operador puede tomar control haciendo clic en el botón **"Tomar control"**.
 
 ---
 
-## Instalación SSL (Producción)
+## Instalación SSL (producción)
 
 Para habilitar HTTPS, coloca los certificados en la carpeta `ssl/certs/`:
 
@@ -180,14 +261,23 @@ ssl/
 **Generar certificados con Certbot:**
 
 ```bash
-# Backend
+# Instalar certbot
+snap install --classic certbot
+
+# Backend (api.tudominio.com)
 certbot certonly --cert-name backend --webroot --webroot-path ./ssl/www/ -d api.tudominio.com
 
-# Frontend
+# Frontend (app.tudominio.com)
 certbot certonly --cert-name frontend --webroot --webroot-path ./ssl/www/ -d app.tudominio.com
+
+# Copiar certificados a las carpetas correctas
+cp /etc/letsencrypt/live/backend/fullchain.pem ssl/certs/backend/
+cp /etc/letsencrypt/live/backend/privkey.pem ssl/certs/backend/
+cp /etc/letsencrypt/live/frontend/fullchain.pem ssl/certs/frontend/
+cp /etc/letsencrypt/live/frontend/privkey.pem ssl/certs/frontend/
 ```
 
-Luego actualiza el `.env` con las URLs de producción:
+Actualizar el `.env` para producción:
 
 ```bash
 BACKEND_URL=https://api.tudominio.com
@@ -195,12 +285,53 @@ BACKEND_SERVER_NAME=api.tudominio.com
 PROXY_PORT=443
 FRONTEND_URL=https://app.tudominio.com
 FRONTEND_SERVER_NAME=app.tudominio.com
+FRONTEND_PORT=80
+FRONTEND_SSL_PORT=443
 ```
 
-Y reconstruye:
+Reconstruir el frontend (necesario para que tome la nueva URL):
 
 ```bash
-docker compose up -d --build
+docker compose up --build -d frontend
+```
+
+---
+
+## Comandos útiles
+
+```bash
+# Ver estado de contenedores
+docker compose ps
+
+# Ver logs en tiempo real
+docker compose logs -f
+docker compose logs -f backend    # solo backend
+docker compose logs -f frontend   # solo frontend
+
+# Reiniciar un servicio
+docker compose restart backend
+docker compose restart frontend
+
+# Detener todo (sin borrar datos)
+docker compose down
+
+# Detener y eliminar volúmenes — ¡BORRA LA BASE DE DATOS!
+docker compose down -v
+
+# Ejecutar migraciones manualmente
+docker exec exaticket-backend-1 npx sequelize db:migrate
+
+# Ejecutar seeds manualmente (solo si es necesario)
+docker exec exaticket-backend-1 npx sequelize db:seed:all
+
+# Ver logs del servidor en tiempo real
+docker logs -f exaticket-backend-1
+
+# Entrar al contenedor del backend
+docker exec -it exaticket-backend-1 bash
+
+# Ver uso de disco de imágenes Docker
+docker system df
 ```
 
 ---
@@ -208,34 +339,62 @@ docker compose up -d --build
 ## Actualización
 
 ```bash
+# Obtener últimos cambios
 git pull
-docker compose up -d --build
+
+# Reconstruir y reiniciar
+docker compose up --build -d
+
+# Las migraciones se ejecutan automáticamente al reiniciar el backend
 ```
 
-Las migraciones de base de datos se ejecutan automáticamente al iniciar el contenedor del backend.
+> **Nota:** Después de cada actualización verifica el archivo `.env.example` por si hay nuevas variables y agrégalas a tu `.env`.
 
 ---
 
-## Comandos útiles
+## Solución de problemas
+
+**El frontend carga pero no puede conectarse al backend (`ERR_CONNECTION_REFUSED`)**
+
+El backend tarda varios minutos en iniciar la primera vez porque ejecuta todas las migraciones de base de datos. Espera a que los logs muestren `Server started on port: 3000` antes de acceder.
 
 ```bash
-# Ver logs en tiempo real
-docker compose logs -f
+# Verificar que el backend está corriendo
+docker compose ps
 
-# Reiniciar un servicio
-docker compose restart backend
+# Ver si las migraciones terminaron
+docker logs exaticket-backend-1 | tail -5
+```
 
-# Detener todo
-docker compose down
+**Error al hacer login: credenciales inválidas**
 
-# Detener y eliminar volúmenes (¡borra la base de datos!)
-docker compose down -v
+Los seeds no se han ejecutado. Correr:
 
-# Ejecutar migraciones manualmente
-docker compose exec backend npx sequelize db:migrate
+```bash
+docker exec exaticket-backend-1 npx sequelize db:seed:all
+```
 
-# Ejecutar seeds manualmente
-docker compose exec backend npx sequelize db:seed:all
+**Docker no inicia (`docker.socket: Failed to resolve group docker`)**
+
+El grupo `docker` no existió al momento de instalar. Reiniciar el socket:
+
+```bash
+systemctl start docker.socket
+systemctl start docker
+```
+
+**El build falla con `not found: /.docker/add-env-vars.sh`**
+
+Los archivos de configuración de nginx no estuvieron incluidos al copiar el proyecto. Asegúrate de clonar con `git clone` completo, sin excluir la carpeta `frontend/.docker/`.
+
+**No hay suficiente espacio en disco**
+
+```bash
+# Limpiar imágenes y capas sin usar
+docker system prune -a
+
+# Ver cuánto ocupa cada imagen
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 ```
 
 ---
@@ -244,19 +403,37 @@ docker compose exec backend npx sequelize db:seed:all
 
 ```
 ExaTicket/
-├── backend/          # API Node.js + TypeScript
+├── backend/                          # API Node.js + TypeScript
 │   ├── src/
-│   │   ├── services/AIServices/   # Chat IA con Claude
-│   │   ├── handlers/              # Eventos de WhatsApp
-│   │   ├── models/                # Modelos Sequelize
-│   │   └── database/migrations/   # Migraciones DB
-│   └── Dockerfile
-├── frontend/         # React + Material UI + Vite
+│   │   ├── config/auth.ts            # JWT secrets requeridos (no hardcoded)
+│   │   ├── services/
+│   │   │   └── AIServices/
+│   │   │       └── GetAIResponse.ts  # Integración Claude Haiku
+│   │   ├── handlers/
+│   │   │   └── handleWhatsappEvents.ts  # Lógica IA + escalado
+│   │   ├── models/
+│   │   │   └── Ticket.ts             # Campos aiActive, aiAttempts
+│   │   └── database/
+│   │       ├── migrations/
+│   │       │   └── 20260521000000-add-ai-fields-to-tickets.ts
+│   │       └── seeds/
+│   │           └── 20260521000000-add-ai-settings.ts
+│   └── Dockerfile                    # Node.js 18 + Chrome
+├── frontend/                         # React + Material UI + Vite
 │   ├── src/
-│   └── Dockerfile
-├── ssl/              # Certificados SSL (no incluidos en git)
-├── docker-compose.yaml
-└── .env.example
+│   │   ├── components/
+│   │   │   ├── TicketActionButtons/  # Botón "Tomar control" IA
+│   │   │   └── TicketListItem/       # Badge IA en lista tickets
+│   │   └── pages/Settings/           # Panel configuración IA
+│   ├── .docker/
+│   │   ├── nginx/                    # Configuración nginx
+│   │   └── add-env-vars.sh           # Inyección VITE_* en runtime
+│   └── Dockerfile                    # Node.js 18-alpine + nginx
+├── ssl/                              # Certificados SSL (no en git)
+├── .docker/data/                     # Datos MySQL (no en git)
+├── docker-compose.yaml               # Orquestación completa
+├── .env.example                      # Plantilla de variables
+└── README.md
 ```
 
 ---
