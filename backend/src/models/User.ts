@@ -55,6 +55,12 @@ class User extends Model<User> {
   @BelongsTo(() => Whatsapp)
   whatsapp: Whatsapp;
 
+  @Column({ allowNull: true })
+  passwordResetToken: string;
+
+  @Column({ allowNull: true })
+  passwordResetExpires: Date;
+
   @CreatedAt
   createdAt: Date;
 

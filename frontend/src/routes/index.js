@@ -1,12 +1,13 @@
 import React from "react";
-import { BrowserRouter, Switch } from "react-router-dom";
+import { BrowserRouter, Switch, Redirect } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 
 import LoggedInLayout from "../layout";
 import Dashboard from "../pages/Dashboard/";
 import Tickets from "../pages/Tickets/";
-import Signup from "../pages/Signup/";
 import Login from "../pages/Login/";
+import ForgotPassword from "../pages/ForgotPassword/";
+import ResetPassword from "../pages/ResetPassword/";
 import Connections from "../pages/Connections/";
 import Settings from "../pages/Settings/";
 import Users from "../pages/Users";
@@ -25,7 +26,10 @@ const Routes = () => {
         <ThemeProvider>
           <Switch>
             <Route exact path="/login" component={Login} />
-            <Route exact path="/signup" component={Signup} />
+            {/* Signup deshabilitado — redirigir a login */}
+            <Route exact path="/signup" render={() => <Redirect to="/login" />} />
+            <Route exact path="/forgot-password" component={ForgotPassword} />
+            <Route exact path="/reset-password/:token" component={ResetPassword} />
             <WhatsAppsProvider>
               <LoggedInLayout>
                 <Route exact path="/" component={Dashboard} isPrivate />

@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import AppError from "../errors/AppError";
 
 import AuthUserService from "../services/UserServices/AuthUserService";
+import ForgotPasswordService from "../services/UserServices/ForgotPasswordService";
+import ResetPasswordService from "../services/UserServices/ResetPasswordService";
 import { SendRefreshToken } from "../helpers/SendRefreshToken";
 import { RefreshTokenService } from "../services/AuthServices/RefreshTokenService";
 
@@ -48,4 +50,35 @@ export const remove = async (
   res.clearCookie("jrt");
 
   return res.send();
+};
+
+export const forgotPassword = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new AppError("ERR_EMAIL_REQUIRED", 400);
+  }
+
+  // Always returns 200 to avoid email enumeration
+  await ForgotPasswordService(email);
+
+  return res.status(200).json({ message: "OK" });
+};
+
+export const resetPassword = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    throw new AppError("ERR_FIELDS_REQUIRED", 400);
+  }
+
+  await ResetPasswordService(token, password);
+
+  return res.status(200).json({ message: "Password updated" });
 };

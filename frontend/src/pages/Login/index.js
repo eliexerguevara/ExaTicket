@@ -131,15 +131,14 @@ const Login = () => {
           >
             {i18n.t("login.buttons.submit")}
           </Button>
-          <Grid container>
+          <Grid container justifyContent="center">
             <Grid item>
               <Link
-                href="#"
                 variant="body2"
                 component={RouterLink}
-                to="/signup"
+                to="/forgot-password"
               >
-                {i18n.t("login.buttons.register")}
+                {i18n.t("login.buttons.forgotPassword")}
               </Link>
             </Grid>
           </Grid>

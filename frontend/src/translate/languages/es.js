@@ -27,6 +27,40 @@ const messages = {
         buttons: {
           submit: "Ingresa",
           register: "¿No tienes cuenta? ¡Regístrate!",
+          forgotPassword: "¿Olvidaste tu contraseña?",
+        },
+      },
+      forgotPassword: {
+        title: "Recuperar contraseña",
+        form: {
+          email: "Correo electrónico",
+        },
+        buttons: {
+          submit: "Enviar instrucciones",
+          backToLogin: "Volver al inicio de sesión",
+        },
+        toasts: {
+          success: "Si el correo está registrado, recibirás las instrucciones en breve.",
+          error: "Error al procesar la solicitud.",
+        },
+      },
+      resetPassword: {
+        title: "Nueva contraseña",
+        form: {
+          password: "Nueva contraseña",
+          confirmPassword: "Confirmar contraseña",
+        },
+        buttons: {
+          submit: "Guardar contraseña",
+          backToLogin: "Volver al inicio de sesión",
+        },
+        errors: {
+          minLength: "La contraseña debe tener al menos 5 caracteres.",
+          mismatch: "Las contraseñas no coinciden.",
+        },
+        toasts: {
+          success: "¡Contraseña actualizada! Ya puedes iniciar sesión.",
+          error: "El enlace es inválido o ha expirado.",
         },
       },
       auth: {
@@ -482,6 +516,10 @@ const messages = {
           "Este color ya está en uso, elija otro.",
         ERR_WAPP_GREETING_REQUIRED:
           "El mensaje de saludo es obligatorio cuando hay más de una cola.",
+        ERR_RESET_TOKEN_INVALID:
+          "El enlace de recuperación es inválido o ha expirado. Solicita uno nuevo.",
+        ERR_EMAIL_REQUIRED: "El correo electrónico es obligatorio.",
+        ERR_FIELDS_REQUIRED: "Todos los campos son obligatorios.",
       },
     },
   },
