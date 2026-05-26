@@ -358,7 +358,7 @@ const TicketListItem = ({ ticket }) => {
 									)}
 								</Typography>
 							)}
-							{ticket.aiActive && (
+							{ticket.aiActive && !ticket.isGroup && (
 								<Tooltip title={i18n.t("aiChat.aiHandling")}>
 									<div className={classes.aiTag}>
 										<Android style={{ fontSize: 11 }} />
