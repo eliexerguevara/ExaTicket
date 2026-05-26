@@ -5,9 +5,11 @@ import { logger } from "../../utils/logger";
 export interface AIResponse {
   response: string;
   shouldEscalate: boolean;
+  shouldResolve: boolean;
 }
 
 const ESCALATION_MARKER = "[ESCALAR]";
+const RESUELTO_MARKER = "[RESUELTO]";
 
 const buildConversation = (
   messages: Message[]
@@ -54,7 +56,7 @@ export const getAIResponse = async (
   const conversation = buildConversation(messages);
 
   if (conversation.length === 0) {
-    return { response: "", shouldEscalate: false };
+    return { response: "", shouldEscalate: false, shouldResolve: false };
   }
 
   // Prepend Splynx customer data if available
@@ -64,7 +66,9 @@ export const getAIResponse = async (
 
   const fullSystem = `${systemPrompt}${splynxBlock}
 
-INSTRUCCIÓN CRÍTICA: Cuando no puedas resolver el problema o el caso requiera un técnico, escribe exactamente "${ESCALATION_MARKER}" al inicio de tu respuesta seguido de un mensaje breve.
+INSTRUCCIONES CRÍTICAS:
+1. Cuando no puedas resolver el problema o el caso requiera un técnico, escribe exactamente "${ESCALATION_MARKER}" al inicio de tu respuesta seguido de un mensaje breve.
+2. SOLO cuando el cliente confirme EXPLÍCITAMENTE que su servicio está funcionando bien (ejemplos: "ya funciona", "sí tengo internet", "todo está bien", "se solucionó", "perfecto gracias funciona"), escribe exactamente "${RESUELTO_MARKER}" al inicio de tu respuesta seguido de un mensaje de cierre amable. NO uses [RESUELTO] si el cliente solo está agradecido sin confirmar que el servicio funciona.
 
 Responde siempre en español, de forma corta y directa.`;
 
@@ -86,16 +90,22 @@ Responde siempre en español, de forma corta y directa.`;
     const text =
       result.content[0].type === "text" ? result.content[0].text : "";
 
-    const shouldEscalate = text.trimStart().startsWith(ESCALATION_MARKER);
-    const response = shouldEscalate
-      ? text.replace(ESCALATION_MARKER, "").trimStart()
-      : text;
+    const trimmed = text.trimStart();
+    const shouldEscalate = trimmed.startsWith(ESCALATION_MARKER);
+    const shouldResolve = !shouldEscalate && trimmed.startsWith(RESUELTO_MARKER);
+
+    let response = text;
+    if (shouldEscalate) {
+      response = text.replace(ESCALATION_MARKER, "").trimStart();
+    } else if (shouldResolve) {
+      response = text.replace(RESUELTO_MARKER, "").trimStart();
+    }
 
     logger.debug(
-      `AI response for ticket ${ticketId}: shouldEscalate=${shouldEscalate}, tokens_used=${result.usage?.output_tokens}`
+      `AI response for ticket ${ticketId}: shouldEscalate=${shouldEscalate}, shouldResolve=${shouldResolve}, tokens_used=${result.usage?.output_tokens}`
     );
 
-    return { response, shouldEscalate };
+    return { response, shouldEscalate, shouldResolve };
   } catch (err) {
     logger.error(err, "Error calling Claude AI API");
     throw err;

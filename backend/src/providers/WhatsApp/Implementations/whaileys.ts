@@ -1200,6 +1200,31 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       })
     );
   });
+
+  // ── Typing indicator ──────────────────────────────────────────────────────
+  wbot.ev.on("presence.update", ({ id, presences }) => {
+    try {
+      const io = getIO();
+      // id is the chat JID; presences is a map of participant → presence state
+      Object.entries(presences).forEach(([participant, presence]: [string, any]) => {
+        const isTyping =
+          presence?.lastKnownPresence === "composing" ||
+          presence?.lastKnownPresence === "recording";
+
+        // Normalize the contact number (strip @s.whatsapp.net or @c.us)
+        const contactNumber = participant.replace(/@.*$/, "");
+
+        io.to("notification").emit("typing", {
+          contactNumber,
+          chatJid: id,
+          isTyping,
+          whatsappId: sessionId
+        });
+      });
+    } catch (err) {
+      logger.error({ info: "Error handling presence.update", err });
+    }
+  });
 };
 
 const logout = async (sessionId: number): Promise<void> => {

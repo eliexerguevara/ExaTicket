@@ -9,12 +9,15 @@ import {
   BelongsTo,
   HasMany,
   AutoIncrement,
-  Default
+  Default,
+  BelongsToMany
 } from "sequelize-typescript";
 
 import Contact from "./Contact";
+import Label from "./Label";
 import Message from "./Message";
 import Queue from "./Queue";
+import TicketLabel from "./TicketLabel";
 import User from "./User";
 import Whatsapp from "./Whatsapp";
 
@@ -82,6 +85,9 @@ class Ticket extends Model<Ticket> {
 
   @HasMany(() => Message)
   messages: Message[];
+
+  @BelongsToMany(() => Label, () => TicketLabel)
+  labels: Array<Label & { TicketLabel: TicketLabel }>;
 }
 
 export default Ticket;

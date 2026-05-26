@@ -12,6 +12,7 @@ import MessageInput from "../MessageInput/";
 import TicketHeader from "../TicketHeader";
 import TicketInfo from "../TicketInfo";
 import TicketActionButtons from "../TicketActionButtons";
+import TicketLabels from "../TicketLabels";
 import MessagesList from "../MessagesList";
 import api from "../../services/api";
 import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMessageContext";
@@ -164,6 +165,14 @@ const Ticket = () => {
             <TicketActionButtons ticket={ticket} />
           </div>
         </TicketHeader>
+        {ticket.id && (
+          <TicketLabels
+            ticket={ticket}
+            onUpdate={() => {
+              api.get("/tickets/" + ticketId).then(({ data }) => setTicket(data)).catch(() => {});
+            }}
+          />
+        )}
         <ReplyMessageProvider>
           <MessagesList
             ticketId={ticketId}

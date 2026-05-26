@@ -11,8 +11,10 @@ import formatBody from "../helpers/Mustache";
 
 import { Op } from "sequelize";
 import Contact from "../models/Contact";
+import Label from "../models/Label";
 import Queue from "../models/Queue";
 import Ticket from "../models/Ticket";
+import TicketLabel from "../models/TicketLabel";
 import Message from "../models/Message";
 
 import CreateMessageService, {
@@ -268,6 +270,36 @@ const parseRoutingChoice = (body: string): RoutingChoice => {
 const findQueueByName = async (keyword: string): Promise<Queue | null> =>
   Queue.findOne({ where: { name: { [Op.like]: `%${keyword}%` } } });
 
+/** Apply a label by name to a ticket (creates label if missing, skips if already applied) */
+const autoApplyLabel = async (
+  ticketId: number,
+  labelName: string,
+  color = "#ef4444"
+): Promise<void> => {
+  try {
+    const [label] = await Label.findOrCreate({
+      where: { name: labelName },
+      defaults: { name: labelName, color }
+    });
+    await TicketLabel.findOrCreate({
+      where: { ticketId, labelId: label.id }
+    });
+    // Emit socket update so frontend refreshes immediately
+    const io = getIO();
+    const ticket = await Ticket.findByPk(ticketId, {
+      include: [{ model: Label, as: "labels" }]
+    });
+    if (ticket) {
+      io.to("notification")
+        .to(ticket.status)
+        .to(ticketId.toString())
+        .emit("ticket", { action: "update", ticket });
+    }
+  } catch (err) {
+    logger.error(err, `autoApplyLabel error: ticketId=${ticketId} label=${labelName}`);
+  }
+};
+
 // ─── Human-request keywords ────────────────────────────────────────────────────
 
 const HUMAN_REQUEST_KEYWORDS = [
@@ -468,7 +500,15 @@ Reglas adicionales:
   // Fetch Splynx customer context (non-blocking — empty string if disabled/error)
   const splynxContext = await getSplynxContext(contactNumber);
 
-  const { response, shouldEscalate } = await getAIResponse(
+  // Auto-apply "Falla General" label if Splynx reports a general outage
+  if (
+    splynxContext &&
+    /corte\s+general|falla\s+general|avería\s+masiva|outage/i.test(splynxContext)
+  ) {
+    await autoApplyLabel(ticket.id, "Falla General", "#ef4444");
+  }
+
+  const { response, shouldEscalate, shouldResolve } = await getAIResponse(
     ticket.id,
     systemPrompt,
     splynxContext || undefined
@@ -479,6 +519,23 @@ Reglas adicionales:
       await sendMsg(whatsappId, contactNumber, response);
     }
     await escalateToHuman(ticket, whatsappId, contactNumber, "ai_decision");
+    return;
+  }
+
+  if (shouldResolve) {
+    if (response) {
+      await sendMsg(whatsappId, contactNumber, response);
+    }
+    // Close the ticket automatically
+    try {
+      await UpdateTicketService({
+        ticketData: { status: "closed" },
+        ticketId: ticket.id
+      });
+      logger.info(`Ticket ${ticket.id} auto-resolved by AI (client confirmed service OK)`);
+    } catch (err) {
+      logger.error(err, `Error auto-resolving ticket ${ticket.id}`);
+    }
     return;
   }
 

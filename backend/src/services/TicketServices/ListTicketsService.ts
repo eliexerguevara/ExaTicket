@@ -3,6 +3,7 @@ import { startOfDay, endOfDay, parseISO } from "date-fns";
 
 import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
+import Label from "../../models/Label";
 import Message from "../../models/Message";
 import Queue from "../../models/Queue";
 import ShowUserService from "../UserServices/ShowUserService";
@@ -58,6 +59,12 @@ const ListTicketsService = async ({
       model: Whatsapp,
       as: "whatsapp",
       attributes: ["name"]
+    },
+    {
+      model: Label,
+      as: "labels",
+      attributes: ["id", "name", "color"],
+      through: { attributes: [] }
     }
   ];
 

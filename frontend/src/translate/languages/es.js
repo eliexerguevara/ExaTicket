@@ -324,6 +324,7 @@ const messages = {
           contacts: "Contactos",
           quickAnswers: "Respuestas rápidas",
           queues: "Grupos de Trabajo",
+          labels: "Etiquetas",
           administration: "Administración",
           users: "Usuarios",
           settings: "Configuración",
@@ -537,6 +538,58 @@ const messages = {
           "El enlace de recuperación es inválido o ha expirado. Solicita uno nuevo.",
         ERR_EMAIL_REQUIRED: "El correo electrónico es obligatorio.",
         ERR_FIELDS_REQUIRED: "Todos los campos son obligatorios.",
+      },
+      labels: {
+        title: "Etiquetas",
+        confirmationModal: {
+          deleteTitle: "Eliminar etiqueta",
+          deleteMessage: "¿Estás seguro? Se eliminará la etiqueta de todos los chats.",
+        },
+        toasts: {
+          deleted: "Etiqueta eliminada",
+        },
+        table: {
+          name: "Nombre",
+          color: "Color",
+          actions: "Acciones",
+        },
+        buttons: {
+          add: "Nueva etiqueta",
+        },
+      },
+      labelModal: {
+        title: {
+          add: "Nueva etiqueta",
+          edit: "Editar etiqueta",
+        },
+        form: {
+          name: "Nombre",
+          color: "Color",
+        },
+        buttons: {
+          ok: "Guardar",
+          cancel: "Cancelar",
+        },
+        success: "Etiqueta guardada.",
+      },
+      ticketLabels: {
+        title: "Etiquetas",
+        addLabel: "Agregar etiqueta",
+        noLabels: "Sin etiquetas",
+        removeTooltip: "Quitar etiqueta",
+      },
+      broadcast: {
+        title: "Mensaje masivo",
+        labelSelect: "Etiqueta objetivo",
+        message: "Mensaje a enviar",
+        resolveTickets: "Resolver chats automáticamente",
+        send: "Enviar",
+        cancel: "Cancelar",
+        success: "Mensaje enviado a {{sent}} de {{total}} chats",
+        confirm: "¿Enviar mensaje a todos los chats con esta etiqueta?",
+      },
+      typing: {
+        label: "Escribiendo...",
       },
     },
   },

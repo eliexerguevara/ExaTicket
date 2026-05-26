@@ -156,6 +156,31 @@ const useStyles = makeStyles(theme => ({
 		gap: 2,
 	},
 
+	typingText: {
+		color: "#16a34a",
+		fontSize: "0.82em",
+		fontStyle: "italic",
+		fontWeight: 500,
+	},
+
+	labelsRow: {
+		display: "flex",
+		flexWrap: "wrap",
+		gap: 3,
+		marginTop: 2,
+	},
+
+	labelChip: {
+		display: "inline-flex",
+		alignItems: "center",
+		padding: "1px 6px",
+		borderRadius: 8,
+		fontSize: "0.7em",
+		fontWeight: 600,
+		color: "#fff",
+		lineHeight: 1.4,
+	},
+
 	// ── Preview dialog ─────────────────────────────────────────
 	previewDialogTitle: {
 		display: "flex",
@@ -229,7 +254,7 @@ const useStyles = makeStyles(theme => ({
 	},
 }));
 
-const TicketListItem = ({ ticket }) => {
+const TicketListItem = ({ ticket, isTyping = false }) => {
 	const classes = useStyles();
 	const history = useHistory();
 	const [loading, setLoading] = useState(false);
@@ -372,55 +397,75 @@ const TicketListItem = ({ ticket }) => {
 						</span>
 					}
 					secondary={
-						<span className={classes.contactNameWrapper}>
-							{ticket.status === "pending" ? (
-								<span className={classes.pendingButtons}>
-									<Tooltip title="Ver conversación">
-										<IconButton
+						<span>
+							<span className={classes.contactNameWrapper}>
+								{ticket.status === "pending" ? (
+									<span className={classes.pendingButtons}>
+										<Tooltip title="Ver conversación">
+											<IconButton
+												size="small"
+												className={classes.previewBtn}
+												onClick={handleOpenPreview}
+											>
+												<SearchIcon fontSize="small" />
+											</IconButton>
+										</Tooltip>
+										<ButtonWithSpinner
+											color="primary"
+											variant="contained"
 											size="small"
-											className={classes.previewBtn}
-											onClick={handleOpenPreview}
+											loading={loading}
+											onClick={e => {
+												e.stopPropagation();
+												handleAcepptTicket(ticket.id);
+											}}
 										>
-											<SearchIcon fontSize="small" />
-										</IconButton>
-									</Tooltip>
-									<ButtonWithSpinner
-										color="primary"
-										variant="contained"
-										size="small"
-										loading={loading}
-										onClick={e => {
-											e.stopPropagation();
-											handleAcepptTicket(ticket.id);
-										}}
-									>
-										{i18n.t("ticketsList.buttons.accept")}
-									</ButtonWithSpinner>
-								</span>
-							) : (
-								<>
-									<Typography
-										className={classes.contactLastMessage}
-										noWrap
-										component="span"
-										variant="body2"
-										color="textSecondary"
-									>
-										{ticket.lastMessage ? (
-											<MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>
-										) : (
-											<br />
-										)}
-									</Typography>
+											{i18n.t("ticketsList.buttons.accept")}
+										</ButtonWithSpinner>
+									</span>
+								) : (
+									<>
+										<Typography
+											className={classes.contactLastMessage}
+											noWrap
+											component="span"
+											variant="body2"
+											color="textSecondary"
+										>
+											{isTyping ? (
+												<span className={classes.typingText}>
+													{i18n.t("typing.label")}
+												</span>
+											) : ticket.lastMessage ? (
+												<MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>
+											) : (
+												<br />
+											)}
+										</Typography>
 
-									<Badge
-										className={classes.newMessagesCount}
-										badgeContent={ticket.unreadMessages}
-										classes={{
-											badge: classes.badgeStyle,
-										}}
-									/>
-								</>
+										<Badge
+											className={classes.newMessagesCount}
+											badgeContent={ticket.unreadMessages}
+											classes={{
+												badge: classes.badgeStyle,
+											}}
+										/>
+									</>
+								)}
+							</span>
+							{/* Label chips */}
+							{ticket.labels && ticket.labels.length > 0 && (
+								<span className={classes.labelsRow}>
+									{ticket.labels.map(label => (
+										<span
+											key={label.id}
+											className={classes.labelChip}
+											style={{ backgroundColor: label.color }}
+										>
+											{label.name}
+										</span>
+									))}
+								</span>
 							)}
 						</span>
 					}

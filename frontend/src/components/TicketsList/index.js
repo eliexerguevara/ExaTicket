@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useRef } from "react";
 import openSocket from "../../services/socket-io";
 
 import { makeStyles } from "@material-ui/core/styles";
@@ -159,6 +159,9 @@ const reducer = (state, action) => {
 	const [pageNumber, setPageNumber] = useState(1);
 	const [ticketsList, dispatch] = useReducer(reducer, []);
 	const { user } = useContext(AuthContext);
+	// typing: map of contactNumber → timestamp (ms) when composing was last seen
+	const [typingMap, setTypingMap] = useState({});
+	const typingTimers = useRef({});
 
 	useEffect(() => {
 		dispatch({ type: "RESET" });
@@ -245,6 +248,34 @@ const reducer = (state, action) => {
 			}
 		});
 
+		// Typing indicator
+		socket.on("typing", ({ contactNumber, isTyping }) => {
+			if (isTyping) {
+				setTypingMap(prev => ({ ...prev, [contactNumber]: Date.now() }));
+				// Auto-clear after 6 seconds if no further composing event
+				if (typingTimers.current[contactNumber]) {
+					clearTimeout(typingTimers.current[contactNumber]);
+				}
+				typingTimers.current[contactNumber] = setTimeout(() => {
+					setTypingMap(prev => {
+						const next = { ...prev };
+						delete next[contactNumber];
+						return next;
+					});
+				}, 6000);
+			} else {
+				if (typingTimers.current[contactNumber]) {
+					clearTimeout(typingTimers.current[contactNumber]);
+					delete typingTimers.current[contactNumber];
+				}
+				setTypingMap(prev => {
+					const next = { ...prev };
+					delete next[contactNumber];
+					return next;
+				});
+			}
+		});
+
 		return () => {
 			socket.disconnect();
 		};
@@ -294,7 +325,11 @@ const reducer = (state, action) => {
 					) : (
 						<>
 							{ticketsList.map(ticket => (
-								<TicketListItem ticket={ticket} key={ticket.id} />
+								<TicketListItem
+									ticket={ticket}
+									key={ticket.id}
+									isTyping={!!typingMap[ticket.contact?.number]}
+								/>
 							))}
 						</>
 					)}
