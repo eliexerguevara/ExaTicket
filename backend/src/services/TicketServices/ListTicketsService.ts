@@ -142,11 +142,19 @@ const ListTicketsService = async ({
   }
 
   if (isGroup === "true") {
-    whereCondition = {
-      ...whereCondition,
-      isGroup: true,
-      status: { [Op.ne]: "closed" }
-    };
+    if (showAll === "true") {
+      // Admin: show ALL active groups regardless of queue or user assignment
+      whereCondition = {
+        isGroup: true,
+        status: { [Op.ne]: "closed" }
+      };
+    } else {
+      whereCondition = {
+        ...whereCondition,
+        isGroup: true,
+        status: { [Op.ne]: "closed" }
+      };
+    }
   } else if (isGroup === "false") {
     whereCondition = {
       ...whereCondition,

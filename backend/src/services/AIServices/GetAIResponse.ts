@@ -66,9 +66,16 @@ export const getAIResponse = async (
 
   const fullSystem = `${systemPrompt}${splynxBlock}
 
-INSTRUCCIONES CRÍTICAS:
-1. Cuando no puedas resolver el problema o el caso requiera un técnico, escribe exactamente "${ESCALATION_MARKER}" al inicio de tu respuesta seguido de un mensaje breve.
-2. SOLO cuando el cliente confirme EXPLÍCITAMENTE que su servicio está funcionando bien (ejemplos: "ya funciona", "sí tengo internet", "todo está bien", "se solucionó", "perfecto gracias funciona"), escribe exactamente "${RESUELTO_MARKER}" al inicio de tu respuesta seguido de un mensaje de cierre amable. NO uses [RESUELTO] si el cliente solo está agradecido sin confirmar que el servicio funciona.
+INSTRUCCIONES CRÍTICAS — SIGUE ESTAS REGLAS EXACTAMENTE:
+
+REGLA 1 — ESCALAR:
+Si no puedes resolver el problema, el cliente lo pide, o el caso requiere un técnico presencial, escribe literalmente "${ESCALATION_MARKER}" al INICIO de tu respuesta (sin nada antes), seguido del mensaje al cliente.
+Ejemplo: "${ESCALATION_MARKER} Voy a transferirte con un agente que puede ayudarte mejor."
+
+REGLA 2 — CASO RESUELTO:
+Si el cliente confirma en PRESENTE que su servicio YA está funcionando (ejemplos exactos: "ya funciona", "ya tengo internet", "tengo internet ya", "sí funciona", "ya hay internet", "volvió el internet", "se solucionó", "ya conecté", "ya me conectó", "está funcionando ya", "todo funciona ya", "listo funciona"), escribe literalmente "${RESUELTO_MARKER}" al INICIO de tu respuesta (sin nada antes), seguido de un mensaje de cierre cálido en 1 línea.
+Ejemplo correcto: "${RESUELTO_MARKER} ¡Qué bueno que ya tienes internet! Que tengas un excelente día. 😊"
+IMPORTANTE: NO uses ${RESUELTO_MARKER} si el cliente usa tiempo pasado sin confirmar que ahora funciona ("tenía internet" = ambiguo, no resolver). Úsalo SOLO cuando es claro que el servicio funciona AHORA.
 
 Responde siempre en español, de forma corta y directa.`;
 

@@ -29,13 +29,45 @@ import { getAIResponse, getTicketSummary } from "../services/AIServices/GetAIRes
 import CheckSettings from "../helpers/CheckSettings";
 
 /** Lazy-load Splynx so the backend doesn't crash if the module isn't compiled yet */
-const getSplynxContext = async (phone: string): Promise<string> => {
+const getSplynxInfo = async (
+  phone: string
+): Promise<{ context: string; hasOutage: boolean; customerId: number | null }> => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { buildSplynxContext } = require("../services/SplynxService/SplynxService");
     return await buildSplynxContext(phone);
   } catch {
-    return "";
+    return { context: "", hasOutage: false, customerId: null };
+  }
+};
+
+/**
+ * Create a Splynx ticket recording the resolved WhatsApp conversation.
+ * Called automatically when AI or keyword detection marks a case as resolved.
+ */
+const createSplynxResolutionTicket = async (
+  customerId: number,
+  ticketId: number
+): Promise<void> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createSplynxTicket } = require("../services/SplynxService/SplynxService");
+    const summary = await getTicketSummary(ticketId);
+    const dateStr = new Date().toLocaleDateString("es", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+    const subject = `Soporte WhatsApp ${dateStr}`;
+    const body = summary
+      ? `Caso resuelto vía soporte WhatsApp.\n\nResumen:\n${summary}`
+      : "Caso resuelto vía soporte WhatsApp.";
+    await createSplynxTicket(customerId, subject, body, "low", "solved");
+    logger.info(
+      `Splynx resolution ticket created for customer ${customerId} (exaticket ${ticketId})`
+    );
+  } catch (err) {
+    logger.error(err, `Error creating Splynx resolution ticket for ticket ${ticketId}`);
   }
 };
 
@@ -300,6 +332,40 @@ const autoApplyLabel = async (
   }
 };
 
+// ─── Resolution keywords (safety-net for AI [RESUELTO] detection) ─────────────
+// Only phrases that unambiguously mean "service is working RIGHT NOW"
+const RESOLUTION_KEYWORDS = [
+  "ya funciona",
+  "ya tengo internet",
+  "tengo internet ya",
+  "volvió el internet",
+  "volvio el internet",
+  "ya volvio",
+  "ya volvió",
+  "se solucionó",
+  "se soluciono",
+  "ya está funcionando",
+  "ya esta funcionando",
+  "ya conecté",
+  "ya me conecte",
+  "ya me conecté",
+  "ya hay internet",
+  "ya hay señal",
+  "ya tengo señal",
+  "problema resuelto",
+  "listo funciona",
+  "solucionado",
+  "gracias ya funciona",
+  "gracias funciona",
+  "ya me funciona"
+];
+
+/** Returns true only when the client explicitly confirms service is working NOW */
+const clientConfirmsResolution = (body: string): boolean => {
+  const lower = normalize(body);
+  return RESOLUTION_KEYWORDS.some(kw => lower.includes(normalize(kw)));
+};
+
 // ─── Human-request keywords ────────────────────────────────────────────────────
 
 const HUMAN_REQUEST_KEYWORDS = [
@@ -497,21 +563,48 @@ Reglas adicionales:
     // use default
   }
 
-  // Fetch Splynx customer context (non-blocking — empty string if disabled/error)
-  const splynxContext = await getSplynxContext(contactNumber);
+  // Fetch Splynx customer context and metadata (non-blocking)
+  const splynxInfo = await getSplynxInfo(contactNumber);
 
-  // Auto-apply "Falla General" label if Splynx reports a general outage
-  if (
-    splynxContext &&
-    /corte\s+general|falla\s+general|avería\s+masiva|outage/i.test(splynxContext)
-  ) {
+  // Auto-apply "Falla General" label ONLY when Splynx explicitly confirmed an active outage.
+  // Using the structured flag instead of a regex avoids false positives from ticket history.
+  if (splynxInfo.hasOutage) {
     await autoApplyLabel(ticket.id, "Falla General", "#ef4444");
   }
 
+  // ── Safety net: keyword-based resolution detection ─────────────────────────
+  // If the client's message clearly indicates service is working NOW, resolve
+  // immediately without waiting for the AI to emit [RESUELTO].
+  if (clientConfirmsResolution(messageBody)) {
+    const closingMsg =
+      "¡Me alegra que tu servicio esté funcionando! 😊 " +
+      "Tu caso ha quedado registrado. ¡Que tengas un excelente día!";
+    await sendMsg(whatsappId, contactNumber, closingMsg);
+
+    // Create Splynx ticket recording the resolved conversation
+    if (splynxInfo.customerId) {
+      await createSplynxResolutionTicket(splynxInfo.customerId, ticket.id);
+    }
+
+    try {
+      await UpdateTicketService({
+        ticketData: { status: "closed" },
+        ticketId: ticket.id
+      });
+      logger.info(
+        `Ticket ${ticket.id} auto-resolved by keyword detection (client confirmed service OK)`
+      );
+    } catch (err) {
+      logger.error(err, `Error auto-resolving ticket ${ticket.id}`);
+    }
+    return;
+  }
+
+  // ── AI-driven response ─────────────────────────────────────────────────────
   const { response, shouldEscalate, shouldResolve } = await getAIResponse(
     ticket.id,
     systemPrompt,
-    splynxContext || undefined
+    splynxInfo.context || undefined
   );
 
   if (shouldEscalate) {
@@ -526,13 +619,21 @@ Reglas adicionales:
     if (response) {
       await sendMsg(whatsappId, contactNumber, response);
     }
-    // Close the ticket automatically
+
+    // Create Splynx ticket recording the resolved conversation
+    if (splynxInfo.customerId) {
+      await createSplynxResolutionTicket(splynxInfo.customerId, ticket.id);
+    }
+
+    // Close ExaTicket
     try {
       await UpdateTicketService({
         ticketData: { status: "closed" },
         ticketId: ticket.id
       });
-      logger.info(`Ticket ${ticket.id} auto-resolved by AI (client confirmed service OK)`);
+      logger.info(
+        `Ticket ${ticket.id} auto-resolved by AI [RESUELTO] marker`
+      );
     } catch (err) {
       logger.error(err, `Error auto-resolving ticket ${ticket.id}`);
     }

@@ -245,7 +245,9 @@ export const getCustomerTickets = async (
   }
 };
 
-/** Check if there is an open "Falla General" ticket in Splynx */
+/** Check if there is an active "Falla General" ticket in Splynx.
+ *  Validates client-side to avoid false positives when the API
+ *  doesn't support or ignores the subject filter. */
 export const checkGeneralOutage = async (): Promise<SplynxTicket | null> => {
   try {
     const client = await buildClient();
@@ -253,13 +255,29 @@ export const checkGeneralOutage = async (): Promise<SplynxTicket | null> => {
 
     const { data } = await client.get("/admin/support/tickets", {
       params: {
-        "search[status]": "open",
-        "search[type]": "Falla General",
-        items_per_page: 5
+        "search[subject]": "Falla General",
+        items_per_page: 20
       }
     });
     const list: SplynxTicket[] = unwrap(data);
-    return Array.isArray(list) && list.length > 0 ? list[0] : null;
+    if (!Array.isArray(list)) return null;
+
+    // Client-side validation: only treat as outage if the ticket subject
+    // actually contains outage keywords AND has an active status.
+    // This guards against the API returning unrelated tickets.
+    const ACTIVE_STATUSES = ["new", "open", "work in progress", "wait for response"];
+    const outage = list.find(t => {
+      const isOutageSubject = /falla\s+general|corte\s+general|avería\s+masiva/i.test(
+        t.subject || ""
+      );
+      const statusLower = (t.status || "").toLowerCase();
+      const isActive =
+        ACTIVE_STATUSES.some(s => statusLower.includes(s)) ||
+        !["solved", "closed"].includes(statusLower);
+      return isOutageSubject && isActive;
+    });
+
+    return outage || null;
   } catch (err) {
     logger.error(err, "Splynx: checkGeneralOutage error");
     return null;
@@ -271,7 +289,8 @@ export const createSplynxTicket = async (
   customerId: number,
   subject: string,
   message: string,
-  priority: "low" | "medium" | "high" | "critical" = "medium"
+  priority: "low" | "medium" | "high" | "critical" = "medium",
+  status: "open" | "solved" | "closed" = "open"
 ): Promise<SplynxTicket | null> => {
   try {
     const client = await buildClient();
@@ -282,10 +301,12 @@ export const createSplynxTicket = async (
       subject,
       message,
       priority,
-      status: "open"
+      status
     });
     const ticket = unwrap(data);
-    logger.info(`Splynx: ticket created id=${ticket?.id} for customer ${customerId}`);
+    logger.info(
+      `Splynx: ticket created id=${ticket?.id} status=${status} for customer ${customerId}`
+    );
     return ticket || null;
   } catch (err) {
     logger.error(err, "Splynx: createSplynxTicket error");
@@ -295,21 +316,37 @@ export const createSplynxTicket = async (
 
 // ─── Context builder for AI ───────────────────────────────────────────────────
 
+/** Structured result from buildSplynxContext */
+export interface SplynxContextResult {
+  /** Full text block injected into AI system prompt */
+  context: string;
+  /** True only when a REAL "Falla General" ticket is active in Splynx */
+  hasOutage: boolean;
+  /** Splynx customer ID (null if not found) */
+  customerId: number | null;
+}
+
 /**
  * Builds a structured text block with all Splynx data about the caller.
- * This is injected into the AI system prompt before each response.
+ * Returns metadata alongside the context string so callers can
+ * react to outage / customer-id without re-parsing the text.
  */
-export const buildSplynxContext = async (phone: string): Promise<string> => {
+export const buildSplynxContext = async (
+  phone: string
+): Promise<SplynxContextResult> => {
   try {
     const customer = await findCustomerByPhone(phone);
 
     if (!customer) {
-      return (
-        "=== SPLYNX ===\n" +
-        "Cliente NO encontrado por número de teléfono.\n" +
-        "INSTRUCCIÓN: Solicitar el número de teléfono registrado en el contrato o el nombre completo del titular antes de continuar.\n" +
-        "=== FIN SPLYNX ==="
-      );
+      return {
+        context:
+          "=== SPLYNX ===\n" +
+          "Cliente NO encontrado por número de teléfono.\n" +
+          "INSTRUCCIÓN: Solicitar el número de teléfono registrado en el contrato o el nombre completo del titular antes de continuar.\n" +
+          "=== FIN SPLYNX ===",
+        hasOutage: false,
+        customerId: null
+      };
     }
 
     // Fetch all data in parallel
@@ -328,7 +365,7 @@ export const buildSplynxContext = async (phone: string): Promise<string> => {
       ""
     ];
 
-    // General outage block
+    // General outage block — only added when checkGeneralOutage returned a real outage
     if (generalOutage) {
       lines.push(
         "⚠️  FALLA GENERAL ACTIVA EN EL SISTEMA:",
@@ -367,10 +404,15 @@ export const buildSplynxContext = async (phone: string): Promise<string> => {
     }
 
     lines.push("=== FIN DATOS SPLYNX ===");
-    return lines.join("\n");
+
+    return {
+      context: lines.join("\n"),
+      hasOutage: !!generalOutage,
+      customerId: customer.id
+    };
   } catch (err) {
     logger.error(err, "Splynx: buildSplynxContext error");
-    return "";
+    return { context: "", hasOutage: false, customerId: null };
   }
 };
 
