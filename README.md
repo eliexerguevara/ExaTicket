@@ -1,6 +1,6 @@
 # ExaTicket
 
-Sistema de tickets de soporte basado en mensajes de WhatsApp, con **Chat IA de primera respuesta** integrado mediante Claude (Anthropic).
+Sistema de tickets de soporte basado en mensajes de WhatsApp, con **Chat IA de primera respuesta** e integración con **Splynx ISP Billing**.
 
 El backend utiliza [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) o [Baileys](https://github.com/WhiskeySockets/Baileys) para recibir y enviar mensajes de WhatsApp, crear tickets y almacenarlos en una base de datos MySQL/MariaDB.
 
@@ -14,11 +14,14 @@ El frontend es una aplicación de chat multiusuario construida con React y Mater
 
 - Múltiples usuarios atendiendo el mismo número de WhatsApp
 - Conexión a múltiples cuentas de WhatsApp en un solo lugar
+- **Identidad visual ExaTicket** — logo cerebro/circuito, favicon SVG, AppBar con nombre y colores propios
 - **Chat IA de soporte técnico** — la IA atiende primero y escala al operador cuando es necesario
 - **Enrutamiento IA por departamento** — la IA pregunta el área (Administración / Ventas / Soporte) antes de actuar
 - **Adaptación de lenguaje automática** — la IA detecta si el cliente es técnico o no y ajusta el registro de respuesta
 - **Nota interna automática al escalar** — al transferir a un humano la IA genera un resumen del caso visible solo para agentes
 - **Consulta directa al asistente IA** — los agentes pueden preguntarle a la IA sobre cualquier ticket desde el chat
+- **Integración Splynx ISP Billing** — la IA consulta estado de servicios, historial de tickets y cortes generales antes de responder
+- **Pestaña Grupos** — visualización dedicada para conversaciones de grupos de WhatsApp
 - Escalado automático al operador humano (por solicitud del usuario, decisión de la IA o límite de intentos)
 - Creación y gestión de tickets desde el navegador
 - Envío y recepción de mensajes, imágenes, audio y documentos
@@ -180,6 +183,7 @@ Deberías ver:
 == 20200904070004-create-default-settings: migrated
 == 20200904070006-create-apiToken-settings: migrated
 == 20260521000000-add-ai-settings: migrated
+== 20260526000000-add-splynx-settings: migrated
 ```
 
 ### 6. Acceder a la aplicación
@@ -229,7 +233,7 @@ La IA responde automáticamente al primer mensaje de cada ticket e intenta resol
    ```bash
    docker compose restart backend
    ```
-4. En la aplicación ve a **Configuración → IA de Soporte Técnico**
+4. En la aplicación ve a **Configuración → 🤖 IA de Soporte Técnico**
 5. Cambia el estado a **Habilitado**
 6. Personaliza el **Prompt del sistema** y el **Mensaje de escalado**
 
@@ -238,8 +242,11 @@ La IA responde automáticamente al primer mensaje de cada ticket e intenta resol
 ### Flujo de atención IA
 
 ```
-Cliente escribe → IA pregunta departamento (Administración / Ventas / Soporte)
+Cliente escribe → [Splynx: consulta servicios + historial + cortes]
                        │
+                  IA recibe contexto del cliente
+                       │
+               IA pregunta departamento
           ┌────────────┼────────────┐
           ▼            ▼            ▼
     Administración   Ventas      Soporte técnico
@@ -286,6 +293,8 @@ Al escalar, la IA:
 3. Desactiva el modo IA en el ticket (`aiActive = false`)
 4. Asigna el ticket a la cola de Soporte si estaba sin cola
 
+> **Reactivación automática:** Si un cliente vuelve a escribir después de que su ticket fue resuelto, el sistema crea o reabre el ticket con la IA activa nuevamente (`aiActive = true, aiAttempts = 0`).
+
 ---
 
 ### Notas internas IA
@@ -331,7 +340,7 @@ Body: { "question": "¿podría estar el router desconfigurado?" }
 
 ---
 
-### Configuración desde base de datos (Settings)
+### Configuración IA desde la interfaz (Settings)
 
 | Clave | Descripción | Valor por defecto |
 |---|---|---|
@@ -341,6 +350,90 @@ Body: { "question": "¿podría estar el router desconfigurado?" }
 | `aiMaxAttempts` | Máximo de mensajes antes de escalar | `10` |
 
 Cuando hay un ticket siendo atendido por la IA, aparece un badge morado **"IA"** en la lista de tickets. El operador puede tomar control haciendo clic en el botón **"Tomar control"**.
+
+---
+
+## Integración Splynx ISP Billing
+
+ExaTicket puede conectarse a tu servidor Splynx para enriquecer automáticamente el contexto de la IA con datos reales del cliente antes de responder.
+
+### Qué consulta la IA
+
+Cuando un cliente escribe, ExaTicket busca al cliente en Splynx por número de teléfono y obtiene:
+
+| Dato | Cómo lo usa la IA |
+|---|---|
+| Nombre del cliente | Personaliza el saludo |
+| Estado de servicios (activo / bloqueado / suspendido) | Informa sobre cortes o bloqueos de cuenta |
+| Plan contratado y velocidad | Ayuda a diagnosticar problemas de velocidad |
+| Tickets abiertos en Splynx | Evita crear duplicados; da contexto del historial |
+| Corte general (todos los servicios caídos) | Detecta incidentes masivos y avisa al cliente antes de hacer diagnóstico individual |
+
+### Reglas de comportamiento IA con Splynx
+
+1. **Corte general detectado** → La IA informa que hay un incidente en la zona y no pide al cliente que reinicie equipos hasta que se resuelva
+2. **Servicio bloqueado/suspendido** → La IA indica que la cuenta tiene una restricción y dirige al cliente al área de administración/pagos
+3. **Ticket abierto en Splynx** → La IA menciona que ya hay un caso registrado y da seguimiento
+4. **Cliente no encontrado** → La IA continúa sin contexto Splynx (degradación elegante)
+
+### Activación
+
+1. En la interfaz ve a **Configuración → 🔌 Splynx**
+2. Cambia el estado a **Habilitado**
+3. Expande **"Credenciales de conexión Splynx"**
+4. Completa los campos:
+
+| Campo | Descripción |
+|---|---|
+| **URL del servidor** | Ej: `https://splynx.tuisp.com` (sin barra final) |
+| **API Key** | Clave pública del API de Splynx |
+| **API Secret** | Secreto del API de Splynx (se almacena cifrado en BD) |
+
+5. Haz clic en **"Probar conexión"** — deberías ver ✅ `Conexión exitosa con Splynx vX.X`
+6. Guarda con el botón **Guardar**
+
+> Los tokens de Splynx se cachean por 23 horas para evitar re-autenticación en cada mensaje.
+
+### Configuración Splynx desde Settings
+
+| Clave | Descripción | Valor por defecto |
+|---|---|---|
+| `splynxEnabled` | `"enabled"` o `"disabled"` | `disabled` |
+| `splynxApiUrl` | URL base del servidor Splynx | vacío |
+| `splynxApiKey` | API Key de Splynx | vacío |
+| `splynxApiSecret` | API Secret de Splynx | vacío |
+
+### Endpoint de prueba
+
+```
+POST /api/splynx/test-connection
+Body: { "apiUrl": "https://...", "apiKey": "...", "apiSecret": "..." }
+Response: { "ok": true, "message": "Conexión exitosa con Splynx v4.x" }
+```
+
+---
+
+## Interfaz de usuario
+
+### Navegación principal
+
+| Ítem del menú | Descripción |
+|---|---|
+| Dashboard | Panel de estadísticas |
+| Conexiones | Gestión de cuentas WhatsApp |
+| **Chat's** | Lista de conversaciones / tickets |
+| Contactos | Directorio de clientes |
+| Respuestas rápidas | Plantillas de respuesta |
+| Usuarios / Colas / Configuración | Solo administradores |
+
+### Pestañas en Chat's
+
+| Pestaña | Descripción |
+|---|---|
+| **Bandeja** | Tickets abiertos y en cola asignados al agente |
+| **Resueltos** | Tickets cerrados |
+| **Buscar** | Búsqueda full-text por nombre, número o mensaje |
+| **Grupos** | Conversaciones de grupos de WhatsApp (`isGroup = true`) |
 
 ---
 
@@ -499,6 +592,16 @@ docker system prune -a
 docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 ```
 
+**La integración Splynx no funciona**
+
+1. Verifica que `splynxEnabled = "enabled"` en Configuración
+2. Usa el botón **"Probar conexión"** para validar las credenciales
+3. Comprueba que la URL no tenga barra final (`/`) al final
+4. El token de Splynx se cachea 23 h — si cambias las credenciales, reinicia el backend para limpiar la caché:
+   ```bash
+   docker compose restart backend
+   ```
+
 ---
 
 ## Estructura del proyecto
@@ -509,32 +612,54 @@ ExaTicket/
 │   ├── src/
 │   │   ├── config/auth.ts                # JWT secrets requeridos (no hardcoded)
 │   │   ├── controllers/
-│   │   │   └── MessageController.ts      # +agentAsk: consulta agente→IA
+│   │   │   ├── MessageController.ts      # +agentAsk: consulta agente→IA
+│   │   │   ├── SplynxController.ts       # POST /splynx/test-connection
+│   │   │   └── TicketController.ts       # +isGroup filter en listado
 │   │   ├── routes/
-│   │   │   └── messageRoutes.ts          # POST /messages/:id/agent-ai
+│   │   │   ├── messageRoutes.ts          # POST /messages/:id/agent-ai
+│   │   │   └── settingRoutes.ts          # POST /splynx/test-connection
 │   │   ├── services/
-│   │   │   └── AIServices/
-│   │   │       └── GetAIResponse.ts      # getAIResponse · getAgentAdvice · getTicketSummary
+│   │   │   ├── AIServices/
+│   │   │   │   └── GetAIResponse.ts      # getAIResponse(splynxContext?) · getAgentAdvice
+│   │   │   ├── SplynxService/
+│   │   │   │   └── SplynxService.ts      # findCustomerByPhone · buildSplynxContext · testConnection
+│   │   │   └── TicketServices/
+│   │   │       ├── ListTicketsService.ts # +isGroup filter
+│   │   │       └── FindOrCreateTicketService.ts # aiActive reset al reabrir ticket
 │   │   ├── handlers/
-│   │   │   └── handleWhatsappEvents.ts   # Flujo IA: enrutamiento → soporte → escalado
+│   │   │   └── handleWhatsappEvents.ts   # Flujo IA: Splynx → enrutamiento → soporte → escalado
 │   │   ├── models/
-│   │   │   ├── Ticket.ts                 # Campos aiActive, aiAttempts
+│   │   │   ├── Ticket.ts                 # Campos aiActive, aiAttempts, isGroup
 │   │   │   └── Message.ts                # Campo isInternal (notas privadas)
 │   │   └── database/
 │   │       ├── migrations/
 │   │       │   ├── 20260521000000-add-ai-fields-to-tickets.ts
 │   │       │   └── 20260522100000-add-isInternal-to-messages.ts
 │   │       └── seeds/
-│   │           └── 20260521000000-add-ai-settings.ts
+│   │           ├── 20260521000000-add-ai-settings.ts
+│   │           └── 20260526000000-add-splynx-settings.ts
 │   └── Dockerfile                        # Node.js 18 + Chrome
 ├── frontend/                             # React + Material UI + Vite
+│   ├── public/
+│   │   ├── favicon.svg                   # Favicon cerebro/circuito (SVG)
+│   │   ├── index.html                    # <title>ExaTicket</title>
+│   │   └── manifest.json                 # name: "ExaTicket"
 │   ├── src/
+│   │   ├── assets/
+│   │   │   └── logo.svg                  # Logo cerebro/circuito ExaTicket
 │   │   ├── components/
 │   │   │   ├── MessagesList/             # Renderizado de notas internas IA (fondo ámbar)
 │   │   │   ├── MessageInput/             # Botón 🤖 + panel consulta agente→IA
 │   │   │   ├── TicketActionButtons/      # Botón "Tomar control" IA
-│   │   │   └── TicketListItem/           # Badge IA en lista tickets
-│   │   └── pages/Settings/               # Panel configuración IA
+│   │   │   ├── TicketListItem/           # Badge IA en lista tickets
+│   │   │   └── TicketsManager/           # Pestañas: Bandeja · Resueltos · Buscar · Grupos
+│   │   ├── hooks/
+│   │   │   └── useTickets/               # +isGroup param → API
+│   │   ├── layout/
+│   │   │   ├── index.js                  # AppBar con logo + EXATICKET (blanco en modo oscuro)
+│   │   │   └── MainListItems.js          # Nav: "Chat's" en lugar de "Tickets"
+│   │   ├── pages/Settings/               # Panel IA + Panel Splynx (accordion credenciales)
+│   │   └── translate/languages/es.js     # +tickets.tabs.groups · mainDrawer.tickets="Chat's"
 │   ├── .docker/
 │   │   ├── nginx/                        # Configuración nginx
 │   │   └── add-env-vars.sh               # Inyección VITE_* en runtime
@@ -549,6 +674,25 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v1.5.0 — 2026-05-26
+- **Rebranding ExaTicket**: logo cerebro/circuito SVG en AppBar y como favicon
+- **Texto blanco en modo oscuro**: color explícito para el nombre en la barra superior
+- **Navegación renombrada**: sidebar "Tickets" → **"Chat's"**
+- **Nueva pestaña Grupos**: muestra conversaciones de grupos WhatsApp (`isGroup = true`, excluye cerrados)
+- **Filtro isGroup en backend**: `ListTicketsService` + `TicketController` aceptan parámetro `isGroup`
+- **title + manifest**: actualizados a "ExaTicket"
+
+### v1.4.0 — 2026-05-26
+- **Integración Splynx ISP Billing**: identificación de clientes por teléfono, estado de servicios, historial de tickets, detección de cortes generales
+- **Contexto Splynx en IA**: `buildSplynxContext` inyecta datos del cliente en el system prompt antes de cada respuesta
+- **Panel Splynx en Configuración**: accordion con campos URL, API Key, API Secret, botón "Probar conexión" y selector habilitado/deshabilitado
+- **Token caching**: autenticación con Splynx cacheada 23 h para evitar re-auth por mensaje
+- **Degradación elegante**: si Splynx no está configurado o falla, la IA continúa sin contexto
+
+### v1.3.1 — 2026-05-25
+- **Fix foco robado**: el panel consulta-IA ya no roba el foco al campo de mensajes en cada tecla
+- **Fix IA inactiva tras reapertura**: cuando un cliente escribe después de un ticket resuelto, la IA se reactiva automáticamente (`aiActive = true`, `aiAttempts = 0`)
 
 ### v1.3.0 — 2026-05-22
 - **Adaptación automática de lenguaje**: la IA detecta el nivel técnico del cliente y ajusta su vocabulario (técnico ↔ sencillo)
