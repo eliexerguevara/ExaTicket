@@ -166,6 +166,12 @@ const TicketsManager = () => {
             classes={{ root: classes.tab }}
           />
           <Tab
+            value={"groups"}
+            icon={<GroupIcon />}
+            label={i18n.t("tickets.tabs.groups.title")}
+            classes={{ root: classes.tab }}
+          />
+          <Tab
             value={"closed"}
             icon={<CheckBoxIcon />}
             label={i18n.t("tickets.tabs.closed.title")}
@@ -175,12 +181,6 @@ const TicketsManager = () => {
             value={"search"}
             icon={<SearchIcon />}
             label={i18n.t("tickets.tabs.search.title")}
-            classes={{ root: classes.tab }}
-          />
-          <Tab
-            value={"groups"}
-            icon={<GroupIcon />}
-            label={i18n.t("tickets.tabs.groups.title")}
             classes={{ root: classes.tab }}
           />
         </Tabs>
@@ -236,6 +236,7 @@ const TicketsManager = () => {
           onChange={(values) => setSelectedQueueIds(values)}
         />
       </Paper>
+      {/* ── ABIERTOS ───────────────────────────────────────── */}
       <TabPanel value={tab} name="open" className={classes.ticketsWrapper}>
         <Tabs
           value={tabOpen}
@@ -274,35 +275,44 @@ const TicketsManager = () => {
             status="open"
             showAll={showAllTickets}
             selectedQueueIds={selectedQueueIds}
+            isGroup={false}
             updateCount={(val) => setOpenCount(val)}
             style={applyPanelStyle("open")}
           />
           <TicketsList
             status="pending"
             selectedQueueIds={selectedQueueIds}
+            isGroup={false}
             updateCount={(val) => setPendingCount(val)}
             style={applyPanelStyle("pending")}
           />
         </Paper>
       </TabPanel>
+
+      {/* ── GRUPOS ─────────────────────────────────────────── */}
+      <TabPanel value={tab} name="groups" className={classes.ticketsWrapper}>
+        <TicketsList
+          isGroup={true}
+          showAll={showAllTickets}
+          selectedQueueIds={selectedQueueIds}
+        />
+      </TabPanel>
+
+      {/* ── RESUELTOS ──────────────────────────────────────── */}
       <TabPanel value={tab} name="closed" className={classes.ticketsWrapper}>
         <TicketsList
           status="closed"
           showAll={true}
           selectedQueueIds={selectedQueueIds}
+          isGroup={false}
         />
       </TabPanel>
+
+      {/* ── BUSCAR ─────────────────────────────────────────── */}
       <TabPanel value={tab} name="search" className={classes.ticketsWrapper}>
         <TicketsList
           searchParam={searchParam}
           showAll={true}
-          selectedQueueIds={selectedQueueIds}
-        />
-      </TabPanel>
-      <TabPanel value={tab} name="groups" className={classes.ticketsWrapper}>
-        <TicketsList
-          isGroup={true}
-          showAll={showAllTickets}
           selectedQueueIds={selectedQueueIds}
         />
       </TabPanel>

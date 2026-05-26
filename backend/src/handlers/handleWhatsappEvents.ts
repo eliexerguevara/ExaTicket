@@ -567,8 +567,9 @@ export const handleMessage = async (
     await processVcardMessage(messagePayload);
 
     // Resolve AI state once, reused for both queue-logic and AI-support checks
+    // Groups never get AI responses — double-guard beyond contextPayload.groupContact check
     const aiEnabled = await CheckSettings("aiEnabled").catch(() => "disabled");
-    const aiIsActive = aiEnabled === "enabled" && ticket.aiActive;
+    const aiIsActive = aiEnabled === "enabled" && ticket.aiActive && !ticket.isGroup;
 
     // Skip legacy queue-selection logic when AI is handling routing
     if (

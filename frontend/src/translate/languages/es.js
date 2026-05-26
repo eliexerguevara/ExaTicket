@@ -271,10 +271,10 @@ const messages = {
           message: "Mensaje de",
         },
         tabs: {
-          open: { title: "Bandeja" },
+          open: { title: "ABIERTOS" },
           closed: { title: "Resueltos" },
           search: { title: "Buscar" },
-          groups: { title: "Grupos" },
+          groups: { title: "GRUPOS" },
         },
         search: {
           placeholder: "Buscar tickets y mensajes.",
@@ -297,8 +297,8 @@ const messages = {
         },
       },
       ticketsList: {
-        pendingHeader: "Cola",
-        assignedHeader: "Trabajando en",
+        pendingHeader: "EN ESPERA",
+        assignedHeader: "ASIGNADOS A MI",
         noTicketsTitle: "¡Nada acá!",
         connectionTitle: "Conexión que se está utilizando actualmente.",
         noTicketsMessage:
