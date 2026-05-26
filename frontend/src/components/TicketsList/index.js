@@ -153,7 +153,7 @@ const reducer = (state, action) => {
 };
 
 	const TicketsList = (props) => {
-		const { status, searchParam, showAll, selectedQueueIds, updateCount, style } =
+		const { status, searchParam, showAll, selectedQueueIds, updateCount, style, isGroup } =
 			props;
 	const classes = useStyles();
 	const [pageNumber, setPageNumber] = useState(1);
@@ -163,7 +163,7 @@ const reducer = (state, action) => {
 	useEffect(() => {
 		dispatch({ type: "RESET" });
 		setPageNumber(1);
-	}, [status, searchParam, dispatch, showAll, selectedQueueIds]);
+	}, [status, searchParam, dispatch, showAll, selectedQueueIds, isGroup]);
 
 	const { tickets, hasMore, loading } = useTickets({
 		pageNumber,
@@ -171,10 +171,11 @@ const reducer = (state, action) => {
 		status,
 		showAll,
 		queueIds: JSON.stringify(selectedQueueIds),
+		isGroup,
 	});
 
 	useEffect(() => {
-		if (!status && !searchParam) return;
+		if (!status && !searchParam && isGroup === undefined) return;
 		dispatch({
 			type: "LOAD_TICKETS",
 			payload: tickets,
@@ -186,7 +187,8 @@ const reducer = (state, action) => {
 
 		const shouldUpdateTicket = ticket => !searchParam &&
 			(!ticket.userId || ticket.userId === user?.id || showAll) &&
-			(!ticket.queueId || selectedQueueIds.indexOf(ticket.queueId) > -1);
+			(!ticket.queueId || selectedQueueIds.indexOf(ticket.queueId) > -1) &&
+			(isGroup === undefined || ticket.isGroup === isGroup);
 
 		const notBelongsToUserQueues = ticket =>
 			ticket.queueId && selectedQueueIds.indexOf(ticket.queueId) === -1;
@@ -194,6 +196,8 @@ const reducer = (state, action) => {
 		socket.on("connect", () => {
 			if (status) {
 				socket.emit("joinTickets", status);
+			} else if (isGroup) {
+				socket.emit("joinTickets", "open");
 			} else {
 				socket.emit("joinNotification");
 			}
@@ -244,7 +248,7 @@ const reducer = (state, action) => {
 		return () => {
 			socket.disconnect();
 		};
-	}, [status, searchParam, showAll, user, selectedQueueIds]);
+	}, [status, searchParam, showAll, user, selectedQueueIds, isGroup]);
 
 	useEffect(() => {
     if (typeof updateCount === "function") {

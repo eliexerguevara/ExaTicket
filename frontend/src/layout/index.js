@@ -17,6 +17,7 @@ import MenuIcon from "@material-ui/icons/Menu";
 import ChevronLeftIcon from "@material-ui/icons/ChevronLeft";
 import AccountCircle from "@material-ui/icons/AccountCircle";
 import Brightness4Icon from "@material-ui/icons/Brightness4";
+import logo from "../assets/logo.svg";
 
 import MainListItems from "./MainListItems";
 import NotificationsPopOver from "../components/NotificationsPopOver";
@@ -69,9 +70,20 @@ const useStyles = makeStyles((theme) => ({
   menuButtonHidden: {
     display: "none",
   },
-  title: {
+  titleWrapper: {
     flexGrow: 1,
-    color: theme.palette.text.primary,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  logo: {
+    height: 30,
+    width: "auto",
+  },
+  title: {
+    color: theme.palette.type === "dark" ? "#ffffff" : theme.palette.text.primary,
+    fontWeight: 700,
+    letterSpacing: 1,
   },
   drawerPaper: {
     position: "relative",
@@ -226,14 +238,17 @@ const LoggedInLayout = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography
-            component="h1"
-            variant="h6"
-            noWrap
-            className={classes.title}
-          >
-            WhaTicket
-          </Typography>
+          <div className={classes.titleWrapper}>
+            <img src={logo} alt="ExaTicket logo" className={classes.logo} />
+            <Typography
+              component="h1"
+              variant="h6"
+              noWrap
+              className={classes.title}
+            >
+              EXATICKET
+            </Typography>
+          </div>
 
           <div className={classes.themeSwitchContainer}>
             <Brightness4Icon className={classes.themeIcon} />

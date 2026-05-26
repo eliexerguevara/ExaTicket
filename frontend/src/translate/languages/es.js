@@ -274,6 +274,7 @@ const messages = {
           open: { title: "Bandeja" },
           closed: { title: "Resueltos" },
           search: { title: "Buscar" },
+          groups: { title: "Grupos" },
         },
         search: {
           placeholder: "Buscar tickets y mensajes.",
@@ -319,7 +320,7 @@ const messages = {
         listItems: {
           dashboard: "Dashboard",
           connections: "Conexiones",
-          tickets: "Tickets",
+          tickets: "Chat's",
           contacts: "Contactos",
           quickAnswers: "Respuestas rápidas",
           queues: "Grupos de Trabajo",

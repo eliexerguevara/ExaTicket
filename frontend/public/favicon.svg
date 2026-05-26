@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <rect width="100" height="100" rx="18" fill="#006064"/>
+  <!-- Left hemisphere -->
+  <path d="M50 14 C36 14 24 22 20 34 C17 39 17 45 20 50 C15 53 12 59 14 65 C16 71 22 74 28 73 C30 78 35 83 42 84 L50 84 Z" fill="#00ACC1"/>
+  <!-- Right hemisphere -->
+  <path d="M50 14 C64 14 76 22 80 34 C83 39 83 45 80 50 C85 53 88 59 86 65 C84 71 78 74 72 73 C70 78 65 83 58 84 L50 84 Z" fill="#0097A7"/>
+  <!-- Circuit nodes -->
+  <circle cx="34" cy="30" r="3" fill="white"/>
+  <circle cx="50" cy="23" r="3" fill="white"/>
+  <circle cx="66" cy="30" r="3" fill="white"/>
+  <circle cx="29" cy="53" r="3" fill="white"/>
+  <circle cx="71" cy="53" r="3" fill="white"/>
+  <circle cx="39" cy="68" r="3" fill="white"/>
+  <circle cx="61" cy="68" r="3" fill="white"/>
+  <!-- Circuit connections -->
+  <polyline points="34,30 50,23 66,30" stroke="white" stroke-width="1.6" stroke-linejoin="round" fill="none"/>
+  <line x1="34" y1="30" x2="29" y2="53" stroke="white" stroke-width="1.6"/>
+  <line x1="66" y1="30" x2="71" y2="53" stroke="white" stroke-width="1.6"/>
+  <line x1="29" y1="53" x2="39" y2="68" stroke="white" stroke-width="1.6"/>
+  <line x1="71" y1="53" x2="61" y2="68" stroke="white" stroke-width="1.6"/>
+  <line x1="39" y1="68" x2="61" y2="68" stroke="white" stroke-width="1.6"/>
+</svg>

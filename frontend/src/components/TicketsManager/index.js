@@ -8,6 +8,7 @@ import Tab from "@material-ui/core/Tab";
 import Badge from "@material-ui/core/Badge";
 import MoveToInboxIcon from "@material-ui/icons/MoveToInbox";
 import CheckBoxIcon from "@material-ui/icons/CheckBox";
+import GroupIcon from "@material-ui/icons/Group";
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
 import NewTicketModal from "../NewTicketModal";
@@ -41,8 +42,8 @@ const useStyles = makeStyles((theme) => ({
     padding: 8,
   },
   tab: {
-    minWidth: 120,
-    width: 120,
+    minWidth: 90,
+    width: 90,
   },
   ticketOptionsBox: {
     display: "flex",
@@ -176,6 +177,12 @@ const TicketsManager = () => {
             label={i18n.t("tickets.tabs.search.title")}
             classes={{ root: classes.tab }}
           />
+          <Tab
+            value={"groups"}
+            icon={<GroupIcon />}
+            label={i18n.t("tickets.tabs.groups.title")}
+            classes={{ root: classes.tab }}
+          />
         </Tabs>
       </Paper>
       <Paper square elevation={0} className={classes.ticketOptionsBox}>
@@ -289,6 +296,13 @@ const TicketsManager = () => {
         <TicketsList
           searchParam={searchParam}
           showAll={true}
+          selectedQueueIds={selectedQueueIds}
+        />
+      </TabPanel>
+      <TabPanel value={tab} name="groups" className={classes.ticketsWrapper}>
+        <TicketsList
+          isGroup={true}
+          showAll={showAllTickets}
           selectedQueueIds={selectedQueueIds}
         />
       </TabPanel>
