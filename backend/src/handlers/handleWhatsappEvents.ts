@@ -26,6 +26,17 @@ import CreateContactService from "../services/ContactServices/CreateContactServi
 import { getAIResponse, getTicketSummary } from "../services/AIServices/GetAIResponse";
 import CheckSettings from "../helpers/CheckSettings";
 
+/** Lazy-load Splynx so the backend doesn't crash if the module isn't compiled yet */
+const getSplynxContext = async (phone: string): Promise<string> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { buildSplynxContext } = require("../services/SplynxService/SplynxService");
+    return await buildSplynxContext(phone);
+  } catch {
+    return "";
+  }
+};
+
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
 import { MessageType, MessageAck } from "../providers/WhatsApp/types";
 
@@ -454,9 +465,13 @@ Reglas adicionales:
     // use default
   }
 
+  // Fetch Splynx customer context (non-blocking — empty string if disabled/error)
+  const splynxContext = await getSplynxContext(contactNumber);
+
   const { response, shouldEscalate } = await getAIResponse(
     ticket.id,
-    systemPrompt
+    systemPrompt,
+    splynxContext || undefined
   );
 
   if (shouldEscalate) {

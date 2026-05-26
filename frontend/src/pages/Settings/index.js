@@ -9,6 +9,16 @@ import Select from "@material-ui/core/Select";
 import TextField from "@material-ui/core/TextField";
 import Button from "@material-ui/core/Button";
 import Divider from "@material-ui/core/Divider";
+import CircularProgress from "@material-ui/core/CircularProgress";
+import InputAdornment from "@material-ui/core/InputAdornment";
+import IconButton from "@material-ui/core/IconButton";
+import Accordion from "@material-ui/core/Accordion";
+import AccordionSummary from "@material-ui/core/AccordionSummary";
+import AccordionDetails from "@material-ui/core/AccordionDetails";
+import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
+import VisibilityIcon from "@material-ui/icons/Visibility";
+import VisibilityOffIcon from "@material-ui/icons/VisibilityOff";
+import { green, red } from "@material-ui/core/colors";
 import { toast } from "react-toastify";
 
 import api from "../../services/api";
@@ -21,14 +31,12 @@ const useStyles = makeStyles(theme => ({
 		alignItems: "center",
 		padding: theme.spacing(8, 8, 3),
 	},
-
 	paper: {
 		padding: theme.spacing(2),
 		display: "flex",
 		alignItems: "center",
 		marginBottom: 12,
 	},
-
 	paperColumn: {
 		padding: theme.spacing(2),
 		display: "flex",
@@ -36,15 +44,12 @@ const useStyles = makeStyles(theme => ({
 		gap: theme.spacing(2),
 		marginBottom: 12,
 	},
-
 	settingOption: {
 		marginLeft: "auto",
 	},
-
 	margin: {
 		margin: theme.spacing(1),
 	},
-
 	sectionTitle: {
 		fontWeight: 600,
 		marginBottom: theme.spacing(1),
@@ -53,9 +58,46 @@ const useStyles = makeStyles(theme => ({
 		alignItems: "center",
 		gap: theme.spacing(1),
 	},
-
 	saveButton: {
 		alignSelf: "flex-end",
+	},
+	// Splynx accordion
+	accordionRoot: {
+		marginBottom: 12,
+		"&:before": { display: "none" },
+		boxShadow: "0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12)",
+		borderRadius: "4px !important",
+	},
+	accordionSummary: {
+		backgroundColor: "#f0fdf4",
+		borderRadius: 4,
+		fontWeight: 600,
+	},
+	accordionDetails: {
+		flexDirection: "column",
+		gap: theme.spacing(2),
+		display: "flex",
+		padding: theme.spacing(2),
+	},
+	testOk: {
+		display: "flex",
+		alignItems: "center",
+		gap: 6,
+		color: green[700],
+		fontSize: "0.85rem",
+	},
+	testFail: {
+		display: "flex",
+		alignItems: "center",
+		gap: 6,
+		color: red[700],
+		fontSize: "0.85rem",
+	},
+	btnRow: {
+		display: "flex",
+		gap: 8,
+		justifyContent: "flex-end",
+		marginTop: 4,
 	},
 }));
 
@@ -66,15 +108,26 @@ const Settings = () => {
 	const [aiSystemPrompt, setAiSystemPrompt] = useState("");
 	const [aiEscalationMessage, setAiEscalationMessage] = useState("");
 
+	// Splynx state
+	const [splynxApiUrl, setSplynxApiUrl] = useState("");
+	const [splynxApiKey, setSplynxApiKey] = useState("");
+	const [splynxApiSecret, setSplynxApiSecret] = useState("");
+	const [showSecret, setShowSecret] = useState(false);
+	const [testingConn, setTestingConn] = useState(false);
+	const [testResult, setTestResult] = useState(null); // { ok, message }
+
 	useEffect(() => {
 		const fetchSession = async () => {
 			try {
 				const { data } = await api.get("/settings");
 				setSettings(data);
-				const promptSetting = data.find(s => s.key === "aiSystemPrompt");
-				const escalationSetting = data.find(s => s.key === "aiEscalationMessage");
-				if (promptSetting) setAiSystemPrompt(promptSetting.value);
-				if (escalationSetting) setAiEscalationMessage(escalationSetting.value);
+
+				const find = key => (data.find(s => s.key === key) || {}).value || "";
+				setAiSystemPrompt(find("aiSystemPrompt"));
+				setAiEscalationMessage(find("aiEscalationMessage"));
+				setSplynxApiUrl(find("splynxApiUrl"));
+				setSplynxApiKey(find("splynxApiKey"));
+				setSplynxApiSecret(find("splynxApiSecret"));
 			} catch (err) {
 				toastError(err);
 			}
@@ -84,31 +137,23 @@ const Settings = () => {
 
 	useEffect(() => {
 		const socket = openSocket();
-
 		socket.on("settings", data => {
 			if (data.action === "update") {
 				setSettings(prevState => {
 					const aux = [...prevState];
-					const settingIndex = aux.findIndex(s => s.key === data.setting.key);
-					aux[settingIndex].value = data.setting.value;
+					const idx = aux.findIndex(s => s.key === data.setting.key);
+					if (idx >= 0) aux[idx].value = data.setting.value;
 					return aux;
 				});
 			}
 		});
-
-		return () => {
-			socket.disconnect();
-		};
+		return () => { socket.disconnect(); };
 	}, []);
 
 	const handleChangeSetting = async e => {
-		const selectedValue = e.target.value;
-		const settingKey = e.target.name;
-
+		const { name, value } = e.target;
 		try {
-			await api.put(`/settings/${settingKey}`, {
-				value: selectedValue,
-			});
+			await api.put(`/settings/${name}`, { value });
 			toast.success(i18n.t("settings.success"));
 		} catch (err) {
 			toastError(err);
@@ -116,11 +161,11 @@ const Settings = () => {
 	};
 
 	const getSettingValue = key => {
-		const setting = settings.find(s => s.key === key);
-		return setting ? setting.value : "";
+		const s = settings.find(x => x.key === key);
+		return s ? s.value : "";
 	};
 
-	const handleSaveTextSetting = async (key, value) => {
+	const handleSaveText = async (key, value) => {
 		try {
 			await api.put(`/settings/${key}`, { value });
 			toast.success(i18n.t("settings.success"));
@@ -129,12 +174,44 @@ const Settings = () => {
 		}
 	};
 
+	const handleSaveSplynx = async () => {
+		try {
+			await Promise.all([
+				api.put("/settings/splynxApiUrl",    { value: splynxApiUrl }),
+				api.put("/settings/splynxApiKey",    { value: splynxApiKey }),
+				api.put("/settings/splynxApiSecret", { value: splynxApiSecret }),
+			]);
+			toast.success(i18n.t("settings.success"));
+		} catch (err) {
+			toastError(err);
+		}
+	};
+
+	const handleTestSplynx = async () => {
+		setTestingConn(true);
+		setTestResult(null);
+		try {
+			const { data } = await api.post("/splynx/test-connection", {
+				apiUrl:    splynxApiUrl,
+				apiKey:    splynxApiKey,
+				apiSecret: splynxApiSecret,
+			});
+			setTestResult(data);
+		} catch {
+			setTestResult({ ok: false, message: "Error al conectar con el servidor" });
+		} finally {
+			setTestingConn(false);
+		}
+	};
+
 	return (
 		<div className={classes.root}>
-			<Container className={classes.container} maxWidth="sm">
+			<Container maxWidth="sm">
 				<Typography variant="body2" gutterBottom>
 					{i18n.t("settings.title")}
 				</Typography>
+
+				{/* ── Creación de usuarios ─────────────────────────────── */}
 				<Paper className={classes.paper}>
 					<Typography variant="body1">
 						{i18n.t("settings.settings.userCreation.name")}
@@ -143,75 +220,58 @@ const Settings = () => {
 						margin="dense"
 						variant="outlined"
 						native
-						id="userCreation-setting"
 						name="userCreation"
-						value={
-							settings && settings.length > 0 && getSettingValue("userCreation")
-						}
+						value={settings.length > 0 ? getSettingValue("userCreation") : ""}
 						className={classes.settingOption}
 						onChange={handleChangeSetting}
 					>
-						<option value="enabled">
-							{i18n.t("settings.settings.userCreation.options.enabled")}
-						</option>
-						<option value="disabled">
-							{i18n.t("settings.settings.userCreation.options.disabled")}
-						</option>
+						<option value="enabled">{i18n.t("settings.settings.userCreation.options.enabled")}</option>
+						<option value="disabled">{i18n.t("settings.settings.userCreation.options.disabled")}</option>
 					</Select>
-
 				</Paper>
 
 				<Paper className={classes.paper}>
 					<TextField
-						id="api-token-setting"
-						readonly
 						label="Token Api"
 						margin="dense"
 						variant="outlined"
 						fullWidth
-						value={settings && settings.length > 0 && getSettingValue("userApiToken")}
+						InputProps={{ readOnly: true }}
+						value={settings.length > 0 ? getSettingValue("userApiToken") : ""}
 					/>
 				</Paper>
 
+				{/* ── IA de soporte ────────────────────────────────────── */}
 				<Divider style={{ margin: "16px 0" }} />
-
 				<Typography variant="body1" className={classes.sectionTitle}>
 					🤖 {i18n.t("aiChat.settings.title")}
 				</Typography>
 
 				<Paper className={classes.paper}>
-					<Typography variant="body1">
-						{i18n.t("aiChat.settings.enabled")}
-					</Typography>
+					<Typography variant="body1">{i18n.t("aiChat.settings.enabled")}</Typography>
 					<Select
 						margin="dense"
 						variant="outlined"
 						native
 						name="aiEnabled"
-						value={settings && settings.length > 0 && getSettingValue("aiEnabled")}
+						value={settings.length > 0 ? getSettingValue("aiEnabled") : "disabled"}
 						className={classes.settingOption}
 						onChange={handleChangeSetting}
 					>
-						<option value="enabled">
-							{i18n.t("aiChat.settings.options.enabled")}
-						</option>
-						<option value="disabled">
-							{i18n.t("aiChat.settings.options.disabled")}
-						</option>
+						<option value="enabled">{i18n.t("aiChat.settings.options.enabled")}</option>
+						<option value="disabled">{i18n.t("aiChat.settings.options.disabled")}</option>
 					</Select>
 				</Paper>
 
 				<Paper className={classes.paper}>
-					<Typography variant="body1">
-						{i18n.t("aiChat.settings.maxAttempts")}
-					</Typography>
+					<Typography variant="body1">{i18n.t("aiChat.settings.maxAttempts")}</Typography>
 					<TextField
 						margin="dense"
 						variant="outlined"
 						type="number"
 						name="aiMaxAttempts"
 						inputProps={{ min: 1, max: 50 }}
-						value={settings && settings.length > 0 && getSettingValue("aiMaxAttempts")}
+						value={settings.length > 0 ? getSettingValue("aiMaxAttempts") : "10"}
 						className={classes.settingOption}
 						style={{ width: 80 }}
 						onChange={handleChangeSetting}
@@ -219,9 +279,7 @@ const Settings = () => {
 				</Paper>
 
 				<Paper className={classes.paperColumn}>
-					<Typography variant="body1">
-						{i18n.t("aiChat.settings.systemPrompt")}
-					</Typography>
+					<Typography variant="body1">{i18n.t("aiChat.settings.systemPrompt")}</Typography>
 					<TextField
 						multiline
 						rows={6}
@@ -231,21 +289,14 @@ const Settings = () => {
 						value={aiSystemPrompt}
 						onChange={e => setAiSystemPrompt(e.target.value)}
 					/>
-					<Button
-						variant="contained"
-						color="primary"
-						size="small"
-						className={classes.saveButton}
-						onClick={() => handleSaveTextSetting("aiSystemPrompt", aiSystemPrompt)}
-					>
+					<Button variant="contained" color="primary" size="small" className={classes.saveButton}
+						onClick={() => handleSaveText("aiSystemPrompt", aiSystemPrompt)}>
 						{i18n.t("aiChat.settings.save")}
 					</Button>
 				</Paper>
 
 				<Paper className={classes.paperColumn}>
-					<Typography variant="body1">
-						{i18n.t("aiChat.settings.escalationMessage")}
-					</Typography>
+					<Typography variant="body1">{i18n.t("aiChat.settings.escalationMessage")}</Typography>
 					<TextField
 						multiline
 						rows={3}
@@ -255,16 +306,115 @@ const Settings = () => {
 						value={aiEscalationMessage}
 						onChange={e => setAiEscalationMessage(e.target.value)}
 					/>
-					<Button
-						variant="contained"
-						color="primary"
-						size="small"
-						className={classes.saveButton}
-						onClick={() => handleSaveTextSetting("aiEscalationMessage", aiEscalationMessage)}
-					>
+					<Button variant="contained" color="primary" size="small" className={classes.saveButton}
+						onClick={() => handleSaveText("aiEscalationMessage", aiEscalationMessage)}>
 						{i18n.t("aiChat.settings.save")}
 					</Button>
 				</Paper>
+
+				{/* ── Splynx ── Accordion / submenu ───────────────────── */}
+				<Divider style={{ margin: "16px 0" }} />
+				<Typography variant="body1" className={classes.sectionTitle}>
+					🔌 {i18n.t("splynx.settings.title")}
+				</Typography>
+
+				{/* Enable/disable toggle */}
+				<Paper className={classes.paper}>
+					<Typography variant="body1">{i18n.t("splynx.settings.enabled")}</Typography>
+					<Select
+						margin="dense"
+						variant="outlined"
+						native
+						name="splynxEnabled"
+						value={settings.length > 0 ? getSettingValue("splynxEnabled") : "disabled"}
+						className={classes.settingOption}
+						onChange={handleChangeSetting}
+					>
+						<option value="enabled">{i18n.t("splynx.settings.options.enabled")}</option>
+						<option value="disabled">{i18n.t("splynx.settings.options.disabled")}</option>
+					</Select>
+				</Paper>
+
+				{/* Credentials accordion (collapsed by default) */}
+				<Accordion className={classes.accordionRoot} defaultExpanded={false}>
+					<AccordionSummary
+						expandIcon={<ExpandMoreIcon />}
+						className={classes.accordionSummary}
+					>
+						<Typography style={{ fontWeight: 600 }}>
+							🔑 Credenciales de conexión Splynx
+						</Typography>
+					</AccordionSummary>
+					<AccordionDetails className={classes.accordionDetails}>
+
+						<TextField
+							label={i18n.t("splynx.settings.apiUrl")}
+							helperText={i18n.t("splynx.settings.apiUrlHelper")}
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={splynxApiUrl}
+							onChange={e => { setSplynxApiUrl(e.target.value); setTestResult(null); }}
+						/>
+
+						<TextField
+							label={i18n.t("splynx.settings.apiKey")}
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={splynxApiKey}
+							onChange={e => { setSplynxApiKey(e.target.value); setTestResult(null); }}
+						/>
+
+						<TextField
+							label={i18n.t("splynx.settings.apiSecret")}
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							type={showSecret ? "text" : "password"}
+							value={splynxApiSecret}
+							onChange={e => { setSplynxApiSecret(e.target.value); setTestResult(null); }}
+							InputProps={{
+								endAdornment: (
+									<InputAdornment position="end">
+										<IconButton size="small" onClick={() => setShowSecret(v => !v)}>
+											{showSecret ? <VisibilityOffIcon /> : <VisibilityIcon />}
+										</IconButton>
+									</InputAdornment>
+								),
+							}}
+						/>
+
+						{/* Connection test result */}
+						{testResult && (
+							<Typography className={testResult.ok ? classes.testOk : classes.testFail}>
+								{testResult.ok ? "✅" : "❌"} {testResult.message}
+							</Typography>
+						)}
+
+						<div className={classes.btnRow}>
+							<Button
+								variant="outlined"
+								color="primary"
+								size="small"
+								disabled={testingConn || !splynxApiUrl || !splynxApiKey || !splynxApiSecret}
+								onClick={handleTestSplynx}
+								startIcon={testingConn ? <CircularProgress size={14} /> : null}
+							>
+								{testingConn ? i18n.t("splynx.settings.testing") : i18n.t("splynx.settings.testConnection")}
+							</Button>
+							<Button
+								variant="contained"
+								color="primary"
+								size="small"
+								onClick={handleSaveSplynx}
+							>
+								{i18n.t("aiChat.settings.save")}
+							</Button>
+						</div>
+
+					</AccordionDetails>
+				</Accordion>
 
 			</Container>
 		</div>

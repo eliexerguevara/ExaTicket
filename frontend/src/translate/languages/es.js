@@ -428,6 +428,22 @@ const messages = {
           },
         },
       },
+      splynx: {
+        settings: {
+          title: "Integración Splynx",
+          enabled: "Activar integración Splynx",
+          apiUrl: "URL del servidor Splynx",
+          apiUrlHelper: "Ej: https://miempresa.splynx.com",
+          apiKey: "API Key",
+          apiSecret: "API Secret",
+          testConnection: "Probar conexión",
+          testing: "Probando...",
+          options: {
+            enabled: "Habilitado",
+            disabled: "Deshabilitado",
+          },
+        },
+      },
       messagesList: {
         header: {
           assignedTo: "Asignado a:",

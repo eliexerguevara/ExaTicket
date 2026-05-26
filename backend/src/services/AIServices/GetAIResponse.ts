@@ -36,7 +36,8 @@ const buildConversation = (
 
 export const getAIResponse = async (
   ticketId: number,
-  systemPrompt: string
+  systemPrompt: string,
+  splynxContext?: string
 ): Promise<AIResponse> => {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
@@ -56,7 +57,12 @@ export const getAIResponse = async (
     return { response: "", shouldEscalate: false };
   }
 
-  const fullSystem = `${systemPrompt}
+  // Prepend Splynx customer data if available
+  const splynxBlock = splynxContext
+    ? `\n\n${splynxContext}\n\nUSA SIEMPRE EL NOMBRE DEL CLIENTE para saludarlo y personalizar la respuesta.`
+    : "";
+
+  const fullSystem = `${systemPrompt}${splynxBlock}
 
 INSTRUCCIÓN CRÍTICA: Cuando no puedas resolver el problema o el caso requiera un técnico, escribe exactamente "${ESCALATION_MARKER}" al inicio de tu respuesta seguido de un mensaje breve.
 
