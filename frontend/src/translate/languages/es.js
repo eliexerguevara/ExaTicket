@@ -126,6 +126,23 @@ const messages = {
               "Asegúrese de que su teléfono celular esté conectado a Internet y que WhatsApp esté abierto, o haga clic en el botón 'Desconectar' para obtener un nuevo código QR",
           },
         },
+        qrModal: {
+          title: "Vincular WhatsApp",
+          tabQr: "Código QR",
+          tabCode: "Vincular con código",
+        },
+        pairingCode: {
+          instructions: "Ingresa el número de tu WhatsApp con código de país, sin + ni espacios.",
+          phoneLabel: "Número de teléfono",
+          phoneHelper: "Ej: 573123456789",
+          phoneError: "Ingresa un número válido con código de país.",
+          generate: "Generar código",
+          generating: "Generando...",
+          enterCode: "Ingresa este código en tu WhatsApp:",
+          steps: "WhatsApp → Dispositivos vinculados → Vincular con número de teléfono",
+          waiting: "Esperando vinculación...",
+          newCode: "Nuevo código",
+        },
         table: {
           name: "Nombre",
           status: "Estado",

@@ -76,6 +76,11 @@ interface Session extends WASocket {
 const sessions = new Map<number, Session>();
 const stores = new Map<number, Store>();
 
+// ── WA version cache — avoid a slow fetchLatestWaWebVersion on every start ──
+let cachedWaVersion: WAVersion | undefined;
+let cachedWaVersionAt = 0;
+const WA_VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
+
 const msgRetryCounterLRU = new LRUCache<string, number>({
   max: 5000,
   ttl: 600 * 1000,
@@ -901,17 +906,36 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
   }
 
   if (!waVersionToUse) {
-    try {
-      const fetchedVersionData = await fetchLatestWaWebVersion({});
-      if (fetchedVersionData?.version) {
-        waVersionToUse = fetchedVersionData.version;
-        logger.info({
-          info: "Using latest WA Web version",
-          version: waVersionToUse.join(".")
-        });
+    const now = Date.now();
+    if (cachedWaVersion && now - cachedWaVersionAt < WA_VERSION_CACHE_TTL_MS) {
+      waVersionToUse = cachedWaVersion;
+      logger.info({
+        info: "Using cached WA Web version",
+        version: waVersionToUse.join(".")
+      });
+    } else {
+      try {
+        const fetchedVersionData = await fetchLatestWaWebVersion({});
+        if (fetchedVersionData?.version) {
+          waVersionToUse = fetchedVersionData.version;
+          cachedWaVersion = waVersionToUse;
+          cachedWaVersionAt = now;
+          logger.info({
+            info: "Fetched and cached latest WA Web version",
+            version: waVersionToUse.join(".")
+          });
+        }
+      } catch (e) {
+        logger.warn({ info: "Failed to fetch latest WA version, using default" });
+        // Reuse stale cache if available rather than nothing
+        if (cachedWaVersion) {
+          waVersionToUse = cachedWaVersion;
+          logger.info({
+            info: "Using stale cached WA Web version as fallback",
+            version: waVersionToUse.join(".")
+          });
+        }
       }
-    } catch (e) {
-      logger.warn({ info: "Failed to fetch latest WA version, using default" });
     }
   }
 
@@ -1542,6 +1566,28 @@ const fetchChatMessages = async (
     to: normalizedChatId,
     ack: mapMessageAck(msg.status)
   }));
+};
+
+/**
+ * Request a WhatsApp pairing code for the given session.
+ * The session must already be running (status = "qrcode").
+ * @param sessionId  Whatsapp.id
+ * @param phoneNumber  Phone in international format, digits only: e.g. "573123456789"
+ * @returns 8-character code like "ABCD1234"
+ */
+export const requestPairingCode = async (
+  sessionId: number,
+  phoneNumber: string
+): Promise<string> => {
+  const wbot = sessions.get(sessionId);
+  if (!wbot) {
+    throw new AppError("ERR_WAPP_NOT_INITIALIZED");
+  }
+  // Strip any non-digit characters (spaces, dashes, +)
+  const digits = phoneNumber.replace(/\D/g, "");
+  const code = await wbot.requestPairingCode(digits);
+  logger.info({ info: "Pairing code requested", sessionId, phoneDigits: digits });
+  return code;
 };
 
 export const WhaileysProvider: WhatsappProvider = {
