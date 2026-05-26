@@ -41,28 +41,59 @@ export interface SplynxTicket {
 
 let _tokenCache: { token: string; expiresAt: number } | null = null;
 
+/**
+ * Try multiple auth strategies in order until one returns a token.
+ * 1. api_key (addon key)
+ * 2. administrator (admin login/password)
+ */
 const getAuthToken = async (
   apiUrl: string,
   apiKey: string,
-  apiSecret: string
+  apiSecret: string,
+  adminLogin?: string,
+  adminPassword?: string
 ): Promise<string> => {
   if (_tokenCache && Date.now() < _tokenCache.expiresAt) {
     return _tokenCache.token;
   }
 
-  const resp = await axios.post(
-    `${apiUrl}/api/2.0/auth/tokens`,
-    { auth_type: "api_key", key: apiKey, secret: apiSecret },
-    { timeout: 10000 }
-  );
+  // Splynx API v2 token endpoint is admin/auth/tokens (NOT auth/tokens)
+  const endpoint = `${apiUrl}/api/2.0/admin/auth/tokens`;
 
-  const token: string =
-    resp.data?.access_token || resp.data?.response?.access_token || "";
-  if (!token) throw new Error("Splynx: no access_token in auth response");
+  const strategies: Array<{ label: string; body: Record<string, string> }> = [];
 
-  // Cache 23 h (tokens are usually valid 24 h)
-  _tokenCache = { token, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
-  return token;
+  if (apiKey && apiSecret) {
+    strategies.push({
+      label: "api_key",
+      body: { auth_type: "api_key", key: apiKey, secret: apiSecret }
+    });
+  }
+  if (adminLogin && adminPassword) {
+    strategies.push({
+      // auth_type must be "admin" NOT "administrator" in Splynx API v2
+      label: "admin",
+      body: { auth_type: "admin", login: adminLogin, password: adminPassword }
+    });
+  }
+
+  let lastError: Error | null = null;
+  for (const { label, body } of strategies) {
+    try {
+      const resp = await axios.post(endpoint, body, { timeout: 10000 });
+      const token: string =
+        resp.data?.access_token || resp.data?.response?.access_token || "";
+      if (token) {
+        logger.info({ info: `Splynx auth OK via ${label}` });
+        _tokenCache = { token, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
+        return token;
+      }
+    } catch (e: any) {
+      lastError = e;
+      logger.warn({ info: `Splynx auth ${label} failed`, msg: e?.message });
+    }
+  }
+
+  throw lastError || new Error("Splynx: all auth strategies failed");
 };
 
 // Invalidate cache so next request forces a re-auth
@@ -84,22 +115,28 @@ const buildClient = async (): Promise<AxiosInstance | null> => {
   let apiUrl = "";
   let apiKey = "";
   let apiSecret = "";
+  let adminLogin = "";
+  let adminPassword = "";
   try {
-    apiUrl = (await CheckSettings("splynxApiUrl")).replace(/\/$/, "");
-    apiKey = await CheckSettings("splynxApiKey");
-    apiSecret = await CheckSettings("splynxApiSecret");
+    apiUrl        = (await CheckSettings("splynxApiUrl")).replace(/\/$/, "");
+    apiKey        = await CheckSettings("splynxApiKey").catch(() => "");
+    apiSecret     = await CheckSettings("splynxApiSecret").catch(() => "");
+    adminLogin    = await CheckSettings("splynxAdminLogin").catch(() => "");
+    adminPassword = await CheckSettings("splynxAdminPassword").catch(() => "");
   } catch {
     return null;
   }
 
-  if (!apiUrl || !apiKey || !apiSecret) return null;
+  if (!apiUrl) return null;
+  if (!apiKey && !adminLogin) return null;
 
-  const token = await getAuthToken(apiUrl, apiKey, apiSecret);
+  const token = await getAuthToken(apiUrl, apiKey, apiSecret, adminLogin, adminPassword);
 
+  // Splynx API v2 expects: Authorization: Splynx-EA (access_token=TOKEN)
   return axios.create({
     baseURL: `${apiUrl}/api/2.0`,
     headers: {
-      Authorization: `Splynx-EA ${token}`,
+      Authorization: `Splynx-EA (access_token=${token})`,
       "Content-Type": "application/json"
     },
     timeout: 10000
@@ -126,7 +163,7 @@ export const findCustomerByPhone = async (
     const clean = phone.replace(/\D/g, "");
 
     const trySearch = async (q: string): Promise<SplynxCustomer | null> => {
-      const { data } = await client.get("/customers/customer", {
+      const { data } = await client.get("/admin/customers/customer", {
         params: { "search[phone]": q, items_per_page: 5 }
       });
       const list: SplynxCustomer[] = unwrap(data);
@@ -155,7 +192,7 @@ export const findCustomersByName = async (
     const client = await buildClient();
     if (!client) return [];
 
-    const { data } = await client.get("/customers/customer", {
+    const { data } = await client.get("/admin/customers/customer", {
       params: { "search[name]": name, items_per_page: 10 }
     });
     const list = unwrap(data);
@@ -175,7 +212,7 @@ export const getCustomerServices = async (
     if (!client) return [];
 
     const { data } = await client.get(
-      `/customers/customer/${customerId}/internet-service`
+      `/admin/customers/customer/${customerId}/internet-services`
     );
     const list = unwrap(data);
     return Array.isArray(list) ? list : [];
@@ -193,7 +230,7 @@ export const getCustomerTickets = async (
     const client = await buildClient();
     if (!client) return [];
 
-    const { data } = await client.get("/helpdesk/tickets", {
+    const { data } = await client.get("/admin/support/tickets", {
       params: {
         customer_id: customerId,
         items_per_page: 10,
@@ -214,7 +251,7 @@ export const checkGeneralOutage = async (): Promise<SplynxTicket | null> => {
     const client = await buildClient();
     if (!client) return null;
 
-    const { data } = await client.get("/helpdesk/tickets", {
+    const { data } = await client.get("/admin/support/tickets", {
       params: {
         "search[status]": "open",
         "search[type]": "Falla General",
@@ -240,7 +277,7 @@ export const createSplynxTicket = async (
     const client = await buildClient();
     if (!client) return null;
 
-    const { data } = await client.post("/helpdesk/tickets", {
+    const { data } = await client.post("/admin/support/tickets", {
       customer_id: customerId,
       subject,
       message,
@@ -341,24 +378,28 @@ export const buildSplynxContext = async (phone: string): Promise<string> => {
 export const testConnection = async (
   apiUrl: string,
   apiKey: string,
-  apiSecret: string
+  apiSecret: string,
+  adminLogin?: string,
+  adminPassword?: string
 ): Promise<{ ok: boolean; message: string }> => {
   try {
     invalidateToken();
     const token = await getAuthToken(
       apiUrl.replace(/\/$/, ""),
       apiKey,
-      apiSecret
+      apiSecret,
+      adminLogin,
+      adminPassword
     );
     if (!token) return { ok: false, message: "Sin token en la respuesta" };
 
     const client = axios.create({
       baseURL: `${apiUrl.replace(/\/$/, "")}/api/2.0`,
-      headers: { Authorization: `Splynx-EA ${token}` },
+      headers: { Authorization: `Splynx-EA (access_token=${token})` },
       timeout: 8000
     });
 
-    const { data } = await client.get("/customers/customer", {
+    const { data } = await client.get("/admin/customers/customer", {
       params: { items_per_page: 1 }
     });
     const list = unwrap(data);

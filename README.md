@@ -355,7 +355,7 @@ Cuando hay un ticket siendo atendido por la IA, aparece un badge morado **"IA"**
 
 ## Integración Splynx ISP Billing
 
-ExaTicket puede conectarse a tu servidor Splynx para enriquecer automáticamente el contexto de la IA con datos reales del cliente antes de responder.
+ExaTicket puede conectarse a tu servidor Splynx para enriquecer automáticamente el contexto de la IA con datos reales del cliente antes de responder. Utiliza la **REST API v2 de Splynx** con autenticación vía credenciales de administrador o API Key.
 
 ### Qué consulta la IA
 
@@ -376,40 +376,68 @@ Cuando un cliente escribe, ExaTicket busca al cliente en Splynx por número de t
 3. **Ticket abierto en Splynx** → La IA menciona que ya hay un caso registrado y da seguimiento
 4. **Cliente no encontrado** → La IA continúa sin contexto Splynx (degradación elegante)
 
+### Métodos de autenticación
+
+ExaTicket admite dos métodos de autenticación con Splynx (intenta el primero disponible):
+
+| Método | Cuándo usarlo |
+|---|---|
+| **Admin login + password** | El más habitual. Usa el usuario administrador del panel Splynx. No requiere configuración adicional en Splynx. |
+| **API Key + API Secret** | Requiere crear un "Addon API key" en Splynx (`Admin → Addons → API`). Recomendado para entornos de producción multi-tenant. |
+
+Si configuras ambos, ExaTicket intenta primero `api_key` y luego `admin` como respaldo.
+
 ### Activación
 
 1. En la interfaz ve a **Configuración → 🔌 Splynx**
 2. Cambia el estado a **Habilitado**
 3. Expande **"Credenciales de conexión Splynx"**
-4. Completa los campos:
+4. Completa los campos según el método que prefieras:
+
+**Opción A — Credenciales de administrador (recomendado):**
 
 | Campo | Descripción |
 |---|---|
 | **URL del servidor** | Ej: `https://splynx.tuisp.com` (sin barra final) |
-| **API Key** | Clave pública del API de Splynx |
-| **API Secret** | Secreto del API de Splynx (se almacena cifrado en BD) |
+| **Usuario administrador** | Login del administrador en el panel Splynx |
+| **Contraseña administrador** | Contraseña del administrador de Splynx |
 
-5. Haz clic en **"Probar conexión"** — deberías ver ✅ `Conexión exitosa con Splynx vX.X`
+**Opción B — API Key (addon):**
+
+| Campo | Descripción |
+|---|---|
+| **URL del servidor** | Ej: `https://splynx.tuisp.com` (sin barra final) |
+| **API Key** | Clave pública generada en `Admin → Addons → API` |
+| **API Secret** | Secreto generado junto al API Key |
+
+5. Haz clic en **"Probar conexión"** — deberías ver ✅ `Conexión exitosa. Clientes accesibles: N+`
 6. Guarda con el botón **Guardar**
 
-> Los tokens de Splynx se cachean por 23 horas para evitar re-autenticación en cada mensaje.
+> Los tokens de Splynx se cachean por 23 horas para evitar re-autenticación en cada mensaje. Si cambias las credenciales, reinicia el backend para limpiar la caché: `docker compose restart backend`.
 
 ### Configuración Splynx desde Settings
 
 | Clave | Descripción | Valor por defecto |
 |---|---|---|
 | `splynxEnabled` | `"enabled"` o `"disabled"` | `disabled` |
-| `splynxApiUrl` | URL base del servidor Splynx | vacío |
-| `splynxApiKey` | API Key de Splynx | vacío |
-| `splynxApiSecret` | API Secret de Splynx | vacío |
+| `splynxApiUrl` | URL base del servidor Splynx (sin `/` final) | vacío |
+| `splynxApiKey` | API Key de Splynx (addon) | vacío |
+| `splynxApiSecret` | API Secret de Splynx (addon) | vacío |
+| `splynxAdminLogin` | Usuario administrador de Splynx | vacío |
+| `splynxAdminPassword` | Contraseña del administrador de Splynx | vacío |
 
 ### Endpoint de prueba
 
 ```
 POST /api/splynx/test-connection
-Body: { "apiUrl": "https://...", "apiKey": "...", "apiSecret": "..." }
-Response: { "ok": true, "message": "Conexión exitosa con Splynx v4.x" }
+Body (admin):   { "apiUrl": "https://...", "adminLogin": "admin", "adminPassword": "pass" }
+Body (api key): { "apiUrl": "https://...", "apiKey": "KEY", "apiSecret": "SECRET" }
+Response:       { "ok": true, "message": "Conexión exitosa. Clientes accesibles: 634+" }
 ```
+
+### Compatibilidad
+
+La integración usa la **REST API v2 de Splynx** (`/api/2.0/`), compatible con Splynx 3.x y 4.x. No requiere modificaciones en el servidor Splynx — solo que la REST API esté habilitada (activa por defecto en todas las instalaciones modernas).
 
 ---
 
@@ -595,12 +623,21 @@ docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 **La integración Splynx no funciona**
 
 1. Verifica que `splynxEnabled = "enabled"` en Configuración
-2. Usa el botón **"Probar conexión"** para validar las credenciales
-3. Comprueba que la URL no tenga barra final (`/`) al final
-4. El token de Splynx se cachea 23 h — si cambias las credenciales, reinicia el backend para limpiar la caché:
+2. Usa el botón **"Probar conexión"** para validar las credenciales — el error aparece en pantalla
+3. Comprueba que la URL **no tenga barra final** (`/`) — correcto: `https://splynx.tuisp.com`
+4. Verifica que estés usando credenciales de **administrador** de Splynx (el mismo usuario que entra al panel web)
+5. Si tu Splynx usa un dominio con HTTPS, asegúrate de que el certificado SSL sea válido y accesible desde el servidor donde corre ExaTicket
+6. El token de Splynx se cachea 23 h — si cambias las credenciales, reinicia el backend:
    ```bash
    docker compose restart backend
    ```
+
+**`testConnection` devuelve error 401 o "Invalid API call!"**
+
+Esto indica credenciales incorrectas o URL equivocada. Verifica:
+- La URL apunta directamente al servidor Splynx (no a un proxy ni a una IP interna)
+- Las credenciales son de un usuario con perfil **Administrator** en Splynx (no un técnico ni cliente)
+- No hay espacios extras en el usuario o contraseña
 
 ---
 
@@ -622,7 +659,7 @@ ExaTicket/
 │   │   │   ├── AIServices/
 │   │   │   │   └── GetAIResponse.ts      # getAIResponse(splynxContext?) · getAgentAdvice
 │   │   │   ├── SplynxService/
-│   │   │   │   └── SplynxService.ts      # findCustomerByPhone · buildSplynxContext · testConnection
+│   │   │   │   └── SplynxService.ts      # findCustomerByPhone · buildSplynxContext · testConnection · auth admin/api_key
 │   │   │   └── TicketServices/
 │   │   │       ├── ListTicketsService.ts # +isGroup filter
 │   │   │       └── FindOrCreateTicketService.ts # aiActive reset al reabrir ticket
@@ -674,6 +711,19 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v1.7.1 — 2026-05-26
+- **Fix Splynx REST API**: corregidos todos los endpoints de la integración Splynx para que funcionen con la REST API v2 estándar:
+  - Endpoint de autenticación: `/api/2.0/auth/tokens` → `/api/2.0/admin/auth/tokens`
+  - `auth_type`: `"administrator"` → `"admin"` (valor correcto según la spec de Splynx API v2)
+  - Header de autorización: `Splynx-EA TOKEN` → `Splynx-EA (access_token=TOKEN)` (formato requerido por Splynx)
+  - Rutas de clientes: `/customers/customer` → `/admin/customers/customer`
+  - Rutas de tickets: `/helpdesk/tickets` → `/admin/support/tickets`
+  - Ruta de servicios: `/internet-service` → `/internet-services` (plural correcto)
+- **Soporte de credenciales admin**: `testConnection`, `SplynxController` y el panel de Settings ahora aceptan `adminLogin` + `adminPassword` como alternativa (o complemento) al API Key/Secret
+- **Campos en UI**: agregados los campos "Usuario administrador" y "Contraseña administrador" en el accordion de Splynx en Configuración
+- **Seed actualizado**: `20260526000000-add-splynx-settings.ts` incluye `splynxAdminLogin` y `splynxAdminPassword`
+- **Compatibilidad**: la integración funciona con cualquier instalación estándar de Splynx 3.x / 4.x sin cambios en el servidor Splynx
 
 ### v1.5.0 — 2026-05-26
 - **Rebranding ExaTicket**: logo cerebro/circuito SVG en AppBar y como favicon

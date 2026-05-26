@@ -112,7 +112,10 @@ const Settings = () => {
 	const [splynxApiUrl, setSplynxApiUrl] = useState("");
 	const [splynxApiKey, setSplynxApiKey] = useState("");
 	const [splynxApiSecret, setSplynxApiSecret] = useState("");
+	const [splynxAdminLogin, setSplynxAdminLogin] = useState("");
+	const [splynxAdminPassword, setSplynxAdminPassword] = useState("");
 	const [showSecret, setShowSecret] = useState(false);
+	const [showAdminPwd, setShowAdminPwd] = useState(false);
 	const [testingConn, setTestingConn] = useState(false);
 	const [testResult, setTestResult] = useState(null); // { ok, message }
 
@@ -128,6 +131,8 @@ const Settings = () => {
 				setSplynxApiUrl(find("splynxApiUrl"));
 				setSplynxApiKey(find("splynxApiKey"));
 				setSplynxApiSecret(find("splynxApiSecret"));
+				setSplynxAdminLogin(find("splynxAdminLogin"));
+				setSplynxAdminPassword(find("splynxAdminPassword"));
 			} catch (err) {
 				toastError(err);
 			}
@@ -177,9 +182,11 @@ const Settings = () => {
 	const handleSaveSplynx = async () => {
 		try {
 			await Promise.all([
-				api.put("/settings/splynxApiUrl",    { value: splynxApiUrl }),
-				api.put("/settings/splynxApiKey",    { value: splynxApiKey }),
-				api.put("/settings/splynxApiSecret", { value: splynxApiSecret }),
+				api.put("/settings/splynxApiUrl",        { value: splynxApiUrl }),
+				api.put("/settings/splynxApiKey",        { value: splynxApiKey }),
+				api.put("/settings/splynxApiSecret",     { value: splynxApiSecret }),
+				api.put("/settings/splynxAdminLogin",    { value: splynxAdminLogin }),
+				api.put("/settings/splynxAdminPassword", { value: splynxAdminPassword }),
 			]);
 			toast.success(i18n.t("settings.success"));
 		} catch (err) {
@@ -192,9 +199,11 @@ const Settings = () => {
 		setTestResult(null);
 		try {
 			const { data } = await api.post("/splynx/test-connection", {
-				apiUrl:    splynxApiUrl,
-				apiKey:    splynxApiKey,
-				apiSecret: splynxApiSecret,
+				apiUrl:        splynxApiUrl,
+				apiKey:        splynxApiKey,
+				apiSecret:     splynxApiSecret,
+				adminLogin:    splynxAdminLogin,
+				adminPassword: splynxAdminPassword,
 			});
 			setTestResult(data);
 		} catch {
@@ -385,6 +394,39 @@ const Settings = () => {
 							}}
 						/>
 
+						<Typography variant="caption" style={{ marginTop: 12, display: "block", color: "#6b7280" }}>
+							— o autenticación de administrador —
+						</Typography>
+
+						<TextField
+							label="Usuario admin Splynx"
+							helperText="Alternativa si la clave API no funciona"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={splynxAdminLogin}
+							onChange={e => { setSplynxAdminLogin(e.target.value); setTestResult(null); }}
+						/>
+
+						<TextField
+							label="Contraseña admin Splynx"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							type={showAdminPwd ? "text" : "password"}
+							value={splynxAdminPassword}
+							onChange={e => { setSplynxAdminPassword(e.target.value); setTestResult(null); }}
+							InputProps={{
+								endAdornment: (
+									<InputAdornment position="end">
+										<IconButton size="small" onClick={() => setShowAdminPwd(v => !v)}>
+											{showAdminPwd ? <VisibilityOffIcon /> : <VisibilityIcon />}
+										</IconButton>
+									</InputAdornment>
+								),
+							}}
+						/>
+
 						{/* Connection test result */}
 						{testResult && (
 							<Typography className={testResult.ok ? classes.testOk : classes.testFail}>
@@ -397,7 +439,7 @@ const Settings = () => {
 								variant="outlined"
 								color="primary"
 								size="small"
-								disabled={testingConn || !splynxApiUrl || !splynxApiKey || !splynxApiSecret}
+								disabled={testingConn || !splynxApiUrl || (!splynxApiKey && !splynxAdminLogin)}
 								onClick={handleTestSplynx}
 								startIcon={testingConn ? <CircularProgress size={14} /> : null}
 							>
