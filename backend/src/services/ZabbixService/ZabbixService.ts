@@ -144,7 +144,7 @@ const loadCreds = async (): Promise<ZabbixCreds | null> => {
     const usr = apiUser.trim();
     const pwd = apiPassword.trim();
 
-    if (!url) return null;
+    if (!url || !/^https?:\/\//i.test(url)) return null;
     if (!tok && !(usr && pwd)) return null;
 
     return { apiUrl: url, apiToken: tok, apiUser: usr, apiPassword: pwd };
@@ -261,6 +261,15 @@ export const testZabbixConnection = async (
   const pwd   = apiPassword.trim();
 
   if (!url) return { ok: false, message: "Falta el campo: URL del servidor Zabbix" };
+
+  // Validate URL format — must start with http:// or https://
+  if (!/^https?:\/\//i.test(url)) {
+    return {
+      ok: false,
+      message: `La URL debe comenzar con https:// o http://\nEj: https://zabbix.tuisp.com/api_jsonrpc.php`
+    };
+  }
+
   if (!tok && !(usr && pwd)) {
     return { ok: false, message: "Proporciona un API Token o Usuario + Contraseña" };
   }
