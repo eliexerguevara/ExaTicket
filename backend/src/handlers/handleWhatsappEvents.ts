@@ -28,14 +28,16 @@ import CreateContactService from "../services/ContactServices/CreateContactServi
 import { getAIResponse, getTicketSummary } from "../services/AIServices/GetAIResponse";
 import CheckSettings from "../helpers/CheckSettings";
 
-/** Lazy-load Splynx so the backend doesn't crash if the module isn't compiled yet */
+/** Lazy-load Splynx so the backend doesn't crash if the module isn't compiled yet.
+ *  isFirstMessage=true adds the "Encontré tu servicio" greeting instruction. */
 const getSplynxInfo = async (
-  phone: string
+  phone: string,
+  isFirstMessage = false
 ): Promise<{ context: string; hasOutage: boolean; customerId: number | null }> => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { buildSplynxContext } = require("../services/SplynxService/SplynxService");
-    return await buildSplynxContext(phone);
+    return await buildSplynxContext(phone, isFirstMessage);
   } catch {
     return { context: "", hasOutage: false, customerId: null };
   }
@@ -563,8 +565,11 @@ Reglas adicionales:
     // use default
   }
 
-  // Fetch Splynx customer context and metadata (non-blocking)
-  const splynxInfo = await getSplynxInfo(contactNumber);
+  // Fetch Splynx customer context and metadata (non-blocking).
+  // isFirstMessage=true on the first support interaction (aiAttempts===2) so the AI
+  // greets the client with "Encontré tu servicio" and includes the diagnosis block.
+  const isFirstSupportMsg = ticket.aiAttempts === 2;
+  const splynxInfo = await getSplynxInfo(contactNumber, isFirstSupportMsg);
 
   // Auto-apply "Falla General" label ONLY when Splynx explicitly confirmed an active outage.
   // Using the structured flag instead of a regex avoids false positives from ticket history.

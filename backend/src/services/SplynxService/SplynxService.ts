@@ -15,14 +15,23 @@ export interface SplynxCustomer {
 export interface SplynxInternetService {
   id: number;
   customer_id: number;
-  login?: string;
-  status: string; // active | inactive | disabled
-  tariff_plan?: string;
+  login?: string;         // PPPoE login — format often "user@SECTOR"
+  status: string;         // active | inactive | disabled
+  description?: string;   // tariff/plan description (actual API field)
+  tariff_plan?: string;   // alias — kept for backward compat
   ipv4?: string;
   mac?: string;
-  online?: boolean;
-  last_online?: string;
-  router_mac?: string;
+  router_id?: number;     // NAS/router ID (0 or absent if unassigned)
+}
+
+/** Network device (MikroTik, CCR, etc.) that serves the customer */
+export interface SplynxRouter {
+  id: number;
+  title?: string;   // human name, e.g. "MAVILLA SITE 6"
+  ip?: string;      // management IP
+  nas_ip?: string;
+  model?: string;
+  status?: string | null;
 }
 
 export interface SplynxTicket {
@@ -245,6 +254,21 @@ export const getCustomerTickets = async (
   }
 };
 
+/** Get a single router/NAS device by its Splynx ID */
+export const getRouter = async (routerId: number): Promise<SplynxRouter | null> => {
+  if (!routerId || routerId <= 0) return null;
+  try {
+    const client = await buildClient();
+    if (!client) return null;
+    const { data } = await client.get(`/admin/networking/routers/${routerId}`);
+    const r = unwrap(data);
+    return r && typeof r === "object" && r.id ? (r as SplynxRouter) : null;
+  } catch (err) {
+    logger.error(err, `Splynx: getRouter(${routerId}) error`);
+    return null;
+  }
+};
+
 /** Check if there is an active "Falla General" ticket in Splynx.
  *  Validates client-side to avoid false positives when the API
  *  doesn't support or ignores the subject filter. */
@@ -326,13 +350,25 @@ export interface SplynxContextResult {
   customerId: number | null;
 }
 
+/** Extract the sector/site from a PPPoE login string (e.g. "user@VAPUEBLO-SEC02" → "VAPUEBLO-SEC02") */
+const parseSector = (login?: string): string | null => {
+  if (!login) return null;
+  const parts = login.split("@");
+  return parts.length > 1 ? parts[1].trim() : null;
+};
+
 /**
  * Builds a structured text block with all Splynx data about the caller.
  * Returns metadata alongside the context string so callers can
  * react to outage / customer-id without re-parsing the text.
+ *
+ * @param phone           - Customer phone number to look up
+ * @param isFirstMessage  - True only on the FIRST AI message in Phase 3.
+ *                          Adds the "Encontré tu servicio" greeting instruction.
  */
 export const buildSplynxContext = async (
-  phone: string
+  phone: string,
+  isFirstMessage = false
 ): Promise<SplynxContextResult> => {
   try {
     const customer = await findCustomerByPhone(phone);
@@ -365,36 +401,119 @@ export const buildSplynxContext = async (
       ""
     ];
 
-    // General outage block — only added when checkGeneralOutage returned a real outage
+    // ── Greeting instruction (first message only) ──────────────────────────────
+    if (isFirstMessage) {
+      lines.push(
+        `INSTRUCCIÓN DE SALUDO (solo en ESTA respuesta):`,
+        `  Di exactamente: "Hola ${customer.name}, encontré tu servicio en el sistema."`,
+        `  Luego continúa con el diagnóstico indicado abajo.`,
+        ""
+      );
+    }
+
+    // ── General outage block ───────────────────────────────────────────────────
     if (generalOutage) {
       lines.push(
         "⚠️  FALLA GENERAL ACTIVA EN EL SISTEMA:",
         `  Asunto: ${generalOutage.subject}`,
         `  Estado: ${generalOutage.status}`,
         `  Creado: ${generalOutage.created_at}`,
-        "  INSTRUCCIÓN CRÍTICA: Informar al cliente sobre la falla general. NO crear tickets individuales. NO hacer troubleshooting.",
+        "  INSTRUCCIÓN CRÍTICA: Informar al cliente sobre la falla general. NO hacer troubleshooting individual.",
         ""
       );
     }
 
-    // Services block
-    if (services.length > 0) {
+    // ── Service status diagnosis ───────────────────────────────────────────────
+    const activeServices = services.filter(s => s.status === "active");
+    const primaryService = services[0]; // first service regardless of status
+
+    if (services.length === 0) {
+      lines.push("SERVICIOS: Sin servicios registrados.", "");
+    } else {
       lines.push("SERVICIOS DE INTERNET:");
-      services.forEach(s => {
-        const onlineStr = s.online ? "🟢 ONLINE" : "🔴 OFFLINE";
-        lines.push(
-          `  • Plan: ${s.tariff_plan || "N/A"} | Estado: ${s.status} | ${onlineStr}`
-        );
-        if (s.last_online) lines.push(`    Última conexión: ${s.last_online}`);
+      for (const s of services) {
+        const planName = s.description || s.tariff_plan || "N/A";
+        const sector = parseSector(s.login);
+        lines.push(`  • Plan: ${planName} | Estado: ${s.status}`);
         if (s.ipv4) lines.push(`    IP asignada: ${s.ipv4}`);
         if (s.login) lines.push(`    Login PPPoE: ${s.login}`);
-      });
+        if (sector) lines.push(`    Sector/Nodo: ${sector}`);
+      }
       lines.push("");
-    } else {
-      lines.push("SERVICIOS: Sin servicios activos registrados.", "");
+
+      // ── Diagnosis block ──────────────────────────────────────────────────────
+      if (activeServices.length > 0) {
+        // Service is active (enabled in Splynx)
+        const svc = activeServices[0];
+        const sector = parseSector(svc.login);
+
+        // Try to get router info for context
+        let routerInfo = "";
+        if (svc.router_id && svc.router_id > 0) {
+          try {
+            const router = await getRouter(svc.router_id);
+            if (router) {
+              routerInfo = `${router.title || "Nodo desconocido"}` +
+                (router.ip ? ` (IP: ${router.ip})` : "");
+            }
+          } catch {
+            // ignore
+          }
+        }
+        if (!routerInfo && sector) {
+          routerInfo = `Sector ${sector}`;
+        }
+
+        lines.push(
+          "DIAGNÓSTICO:",
+          `  ✅ Servicio ACTIVO en Splynx — el servicio está habilitado y configurado.`,
+          routerInfo
+            ? `  Nodo/Router del cliente: ${routerInfo}`
+            : "",
+          `  INSTRUCCIÓN: El servicio está activo en nuestra red. El problema está del lado del cliente`,
+          `  (equipo del cliente, cables, WiFi, configuración del router doméstico).`,
+          `  Continúa con troubleshooting del equipo del cliente.`,
+          ""
+        );
+      } else if (primaryService) {
+        // Service exists but is disabled/inactive
+        const svc = primaryService;
+        const sector = parseSector(svc.login);
+
+        // Get router details to check if the issue is on the router side
+        let routerName = "desconocido";
+        let routerIp = "";
+        if (svc.router_id && svc.router_id > 0) {
+          try {
+            const router = await getRouter(svc.router_id);
+            if (router) {
+              routerName = router.title || "Nodo desconocido";
+              routerIp = router.ip || router.nas_ip || "";
+            }
+          } catch {
+            // ignore
+          }
+        }
+        const routerLabel = routerName !== "desconocido"
+          ? `${routerName}${routerIp ? ` (${routerIp})` : ""}${sector ? `, sector ${sector}` : ""}`
+          : sector
+            ? `Sector ${sector}`
+            : "no identificado";
+
+        lines.push(
+          "DIAGNÓSTICO:",
+          `  🔴 Servicio ${svc.status.toUpperCase()} en Splynx — el servicio no está activo.`,
+          `  Nodo/Router asignado: ${routerLabel}`,
+          `  INSTRUCCIÓN: El servicio está deshabilitado o suspendido en el sistema.`,
+          `  Puede ser por suspensión por pago, desactivación manual u otro motivo administrativo.`,
+          `  Di al cliente: "Veo que tu servicio aparece como ${svc.status} en nuestro sistema."`,
+          `  Luego pregunta si hubo alguna notificación de suspensión o si tiene adeudo.`,
+          ""
+        );
+      }
     }
 
-    // Ticket history block
+    // ── Ticket history ─────────────────────────────────────────────────────────
     if (tickets.length > 0) {
       lines.push(`HISTORIAL DE TICKETS (últimos ${tickets.length}):`);
       tickets.forEach(t => {
