@@ -381,9 +381,58 @@ Cuando un cliente escribe, ExaTicket busca al cliente en Splynx por número de t
 
 ### Verificación de conectividad en tiempo real (ping check)
 
-ExaTicket puede hacer ping al equipo del cliente directamente desde el servidor Splynx para confirmar si el CPE/ONT responde antes de dar instrucciones de troubleshooting.
+ExaTicket puede verificar si el CPE/ONT del cliente responde en la red antes de dar instrucciones de troubleshooting.
+Soporta **dos métodos** — el sistema intenta Zabbix primero y cae a netcheck.php automáticamente si el IP no está en Zabbix.
 
-#### Cómo funciona
+| Método | Velocidad | Requisito |
+|--------|-----------|-----------|
+| **Zabbix API** (preferido) | ~100 ms — lee datos del ciclo de monitoreo ya ejecutado | Zabbix 5.4+ con hosts monitoreados por IP |
+| **netcheck.php** (fallback) | ~2–4 s — ejecuta ping en tiempo real | Endpoint PHP en el servidor Splynx |
+
+#### Opción A — Zabbix API (recomendado)
+
+Zabbix ya monitorea tus equipos con ICMP ping cada 1 minuto. ExaTicket consulta ese dato directamente en lugar de disparar un nuevo ping, lo que lo hace prácticamente instantáneo.
+
+##### Requisitos previos en Zabbix
+- Los equipos CPE/ONT de los clientes deben estar monitoreados en Zabbix
+- El template asignado debe incluir los ítems `icmpping` y `icmppingsec` (cualquier template ICMP estándar los incluye)
+- Las interfaces de los hosts deben tener la misma IP asignada en Splynx (coincidencia por IP)
+
+##### Crear un token de API (Zabbix 5.4+)
+
+1. Inicia sesión en la interfaz web de Zabbix
+2. Ve a **Administration → API tokens → Create API token**
+3. Asigna un nombre descriptivo (p.ej. `exaticket-readonly`)
+4. Elige un usuario con acceso de **lectura** a los host groups de clientes
+5. Copia el token generado
+
+##### Configurar en ExaTicket
+
+```bash
+# En el servidor de producción (NO en git):
+echo "ZABBIX_API_URL=https://zabbix.tuisp.com/api_jsonrpc.php" >> /root/ExaTicket/.env
+echo "ZABBIX_API_TOKEN=TU_TOKEN_ZABBIX_AQUI" >> /root/ExaTicket/.env
+docker compose restart backend
+```
+
+Si usas Zabbix más antiguo (sin tokens API), usa usuario y contraseña:
+
+```bash
+echo "ZABBIX_API_URL=https://zabbix.tuisp.com/api_jsonrpc.php" >> /root/ExaTicket/.env
+echo "ZABBIX_API_USER=exaticket_ro" >> /root/ExaTicket/.env
+echo "ZABBIX_API_PASSWORD=CONTRASEÑA_AQUI" >> /root/ExaTicket/.env
+docker compose restart backend
+```
+
+> **Usuarios no encontrados:** Si el IP del cliente no está en Zabbix, el sistema automáticamente intenta netcheck.php como fallback.
+
+---
+
+#### Opción B — netcheck.php en servidor Splynx (fallback)
+
+Ejecuta un ping en tiempo real desde el servidor Splynx hacia el equipo del cliente.
+
+##### Cómo funciona
 
 1. La IA obtiene la IP del servicio (`ipv4`) desde la API de Splynx
 2. ExaTicket llama a un endpoint PHP (`netcheck.php`) instalado en el servidor Splynx
@@ -792,6 +841,14 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v1.7.5 — 2026-05-27
+- **Integración Zabbix API**: nuevo `ZabbixService.ts` que consulta el estado ICMP de un host en Zabbix (~100 ms vs ~4 s del ping directo)
+  - Soporta autenticación por API Token (Zabbix 5.4+) y por usuario/contraseña (todas las versiones)
+  - El sistema intenta Zabbix primero; si el IP no está en Zabbix cae automáticamente a `netcheck.php`
+  - Nuevas variables de entorno: `ZABBIX_API_URL`, `ZABBIX_API_TOKEN`, `ZABBIX_API_USER`, `ZABBIX_API_PASSWORD`
+  - Cache de sesión para evitar `user.login` en cada solicitud (TTL 22 h)
+  - `testZabbixConnection()` para verificar conectividad y versión del servidor desde la interfaz
 
 ### v1.7.4 — 2026-05-27
 - **Ping check en tiempo real**: la IA ahora sabe si el equipo del cliente responde desde la red del ISP antes de hacer troubleshooting

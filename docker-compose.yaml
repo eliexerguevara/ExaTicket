@@ -53,6 +53,10 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
       - SPLYNX_PING_TOKEN=${SPLYNX_PING_TOKEN:-}
+      - ZABBIX_API_URL=${ZABBIX_API_URL:-}
+      - ZABBIX_API_TOKEN=${ZABBIX_API_TOKEN:-}
+      - ZABBIX_API_USER=${ZABBIX_API_USER:-}
+      - ZABBIX_API_PASSWORD=${ZABBIX_API_PASSWORD:-}
     ports:
       - ${BACKEND_PORT:-8080}:3000
     volumes:

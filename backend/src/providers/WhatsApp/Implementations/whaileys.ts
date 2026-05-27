@@ -1569,8 +1569,14 @@ const fetchChatMessages = async (
 };
 
 /**
+ * Returns true if the session socket is currently in the sessions Map.
+ */
+export const hasSession = (sessionId: number): boolean =>
+  sessions.has(sessionId);
+
+/**
  * Request a WhatsApp pairing code for the given session.
- * The session must already be running (status = "qrcode").
+ * The session must already be running (in the sessions Map).
  * @param sessionId  Whatsapp.id
  * @param phoneNumber  Phone in international format, digits only: e.g. "573123456789"
  * @returns 8-character code like "ABCD1234"

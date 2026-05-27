@@ -3,7 +3,8 @@ import { whatsappProvider } from "../providers/WhatsApp";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
 import UpdateWhatsAppService from "../services/WhatsappService/UpdateWhatsAppService";
-import { requestPairingCode } from "../providers/WhatsApp/Implementations/whaileys";
+import { requestPairingCode, hasSession } from "../providers/WhatsApp/Implementations/whaileys";
+import { sleep } from "../utils/sleep";
 import { logger } from "../utils/logger";
 
 const store = async (req: Request, res: Response): Promise<Response> => {
@@ -45,16 +46,45 @@ const pairingCode = async (req: Request, res: Response): Promise<Response> => {
     return res.status(400).json({ error: "phoneNumber is required" });
   }
 
+  const sessionId = Number(whatsappId);
+
   try {
-    const code = await requestPairingCode(Number(whatsappId), String(phoneNumber));
-    // Format as XXXX-XXXX for display
-    const formatted = code.length === 8
-      ? `${code.slice(0, 4)}-${code.slice(4)}`
-      : code;
-    return res.status(200).json({ code: formatted });
-  } catch (err) {
+    // If the socket is not in memory, start the session and wait for the
+    // WebSocket to open before requesting the pairing code.
+    if (!hasSession(sessionId)) {
+      logger.info({ info: "Pairing code: session not running, starting it", sessionId });
+      const whatsapp = await ShowWhatsAppService(whatsappId);
+      await StartWhatsAppSession(whatsapp);
+      // init() adds the socket to sessions immediately, but the WA WebSocket
+      // needs a few seconds to connect to WA servers before we can query.
+      await sleep(5000);
+    }
+
+    // Retry up to 3 times in case the WS needs a bit more time to open.
+    let lastErr: any;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const code = await requestPairingCode(sessionId, String(phoneNumber));
+        // Format as XXXX-XXXX for display
+        const formatted = code.length === 8
+          ? `${code.slice(0, 4)}-${code.slice(4)}`
+          : code;
+        return res.status(200).json({ code: formatted });
+      } catch (e: any) {
+        lastErr = e;
+        logger.warn({ info: `Pairing code attempt ${attempt} failed`, err: e?.message, sessionId });
+        if (attempt < 3) await sleep(3000);
+      }
+    }
+
+    throw lastErr;
+  } catch (err: any) {
     logger.error(err, "Error requesting pairing code");
-    return res.status(500).json({ error: "Failed to generate pairing code. Make sure the session is active (qrcode state)." });
+    const detail = err?.message || "Unknown error";
+    return res.status(500).json({
+      error: "Failed to generate pairing code. Please try again.",
+      detail
+    });
   }
 };
 

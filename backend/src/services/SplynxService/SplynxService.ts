@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import CheckSettings from "../../helpers/CheckSettings";
 import { logger } from "../../utils/logger";
+import { checkHostPing } from "../ZabbixService/ZabbixService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -474,14 +475,26 @@ export const buildSplynxContext = async (
         const svc = activeServices[0];
         const sector = parseSector(svc.login);
 
-        // Run router lookup and ping check in parallel
+        // Run router lookup and ping check in parallel.
+        // Ping strategy: try Zabbix first (reads cached monitoring data, ~100 ms),
+        // fall back to netcheck.php on the Splynx server if Zabbix is not configured
+        // or does not monitor this IP.
+        const pingStrategy = async () => {
+          if (!svc.ipv4) return null;
+          const zabbix = await checkHostPing(svc.ipv4).catch(() => null);
+          if (zabbix !== null) return zabbix;
+          // Fallback: live ping via netcheck.php
+          if (apiUrl) {
+            return checkCustomerOnline(svc.ipv4, apiUrl).catch(() => null);
+          }
+          return null;
+        };
+
         const [router, pingResult] = await Promise.all([
           (svc.router_id && svc.router_id > 0)
             ? getRouter(svc.router_id).catch(() => null)
             : Promise.resolve(null),
-          (svc.ipv4 && apiUrl)
-            ? checkCustomerOnline(svc.ipv4, apiUrl).catch(() => null)
-            : Promise.resolve(null)
+          pingStrategy()
         ]);
 
         let routerInfo = "";
