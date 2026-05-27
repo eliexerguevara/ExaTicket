@@ -24,6 +24,9 @@ export default defineConfig({
           ],
         },
       },
+      // Force Rollup to use the CommonJS (non-ESM) distribution of date-fns
+      // to avoid "Could not resolve ./_lib/Setter.js" errors in date-fns ESM
+      external: [],
     },
   },
   envPrefix: "VITE_",
@@ -41,12 +44,17 @@ export default defineConfig({
       "@material-ui/core",
       "@material-ui/icons",
       "@material-ui/lab",
+      // Force Vite to pre-bundle date-fns as CJS, preventing Rollup from
+      // trying to resolve the incomplete ESM package paths at build time
+      "date-fns",
     ],
     exclude: [],
   },
   resolve: {
     alias: {
       "jss-plugin-globalThis": "jss-plugin-global",
+      // Redirect date-fns ESM imports to CommonJS to avoid missing _lib files
+      "date-fns/esm": "date-fns",
     },
   },
 });
