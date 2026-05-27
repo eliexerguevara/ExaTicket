@@ -463,6 +463,28 @@ const messages = {
           },
         },
       },
+      zabbix: {
+        settings: {
+          title: "Integración Zabbix (ping check)",
+          enabled: "Activar verificación de ping vía Zabbix",
+          credentialsTitle: "Credenciales de conexión Zabbix",
+          apiUrl: "URL del servidor Zabbix",
+          apiUrlHelper: "Ej: https://zabbix.miempresa.com/api_jsonrpc.php",
+          authTokenLabel: "— Opción A: API Token (Zabbix 5.4+, recomendado) —",
+          apiToken: "API Token",
+          apiTokenHelper: "Genera en: Administración → API tokens → Crear token",
+          authUserLabel: "— Opción B: Usuario y contraseña (todas las versiones) —",
+          apiUser: "Usuario Zabbix",
+          apiUserHelper: "Usa un usuario de solo lectura con acceso a los hosts",
+          apiPassword: "Contraseña Zabbix",
+          testConnection: "Probar conexión",
+          testing: "Probando...",
+          options: {
+            enabled: "Habilitado",
+            disabled: "Deshabilitado",
+          },
+        },
+      },
       messagesList: {
         header: {
           assignedTo: "Asignado a:",

@@ -119,6 +119,16 @@ const Settings = () => {
 	const [testingConn, setTestingConn] = useState(false);
 	const [testResult, setTestResult] = useState(null); // { ok, message }
 
+	// Zabbix state
+	const [zabbixApiUrl, setZabbixApiUrl] = useState("");
+	const [zabbixApiToken, setZabbixApiToken] = useState("");
+	const [zabbixApiUser, setZabbixApiUser] = useState("");
+	const [zabbixApiPassword, setZabbixApiPassword] = useState("");
+	const [showZabbixToken, setShowZabbixToken] = useState(false);
+	const [showZabbixPwd, setShowZabbixPwd] = useState(false);
+	const [testingZabbix, setTestingZabbix] = useState(false);
+	const [zabbixTestResult, setZabbixTestResult] = useState(null); // { ok, message }
+
 	useEffect(() => {
 		const fetchSession = async () => {
 			try {
@@ -133,6 +143,10 @@ const Settings = () => {
 				setSplynxApiSecret(find("splynxApiSecret"));
 				setSplynxAdminLogin(find("splynxAdminLogin"));
 				setSplynxAdminPassword(find("splynxAdminPassword"));
+				setZabbixApiUrl(find("zabbixApiUrl"));
+				setZabbixApiToken(find("zabbixApiToken"));
+				setZabbixApiUser(find("zabbixApiUser"));
+				setZabbixApiPassword(find("zabbixApiPassword"));
 			} catch (err) {
 				toastError(err);
 			}
@@ -210,6 +224,38 @@ const Settings = () => {
 			setTestResult({ ok: false, message: "Error al conectar con el servidor" });
 		} finally {
 			setTestingConn(false);
+		}
+	};
+
+	const handleSaveZabbix = async () => {
+		try {
+			await Promise.all([
+				api.put("/settings/zabbixApiUrl",      { value: zabbixApiUrl }),
+				api.put("/settings/zabbixApiToken",    { value: zabbixApiToken }),
+				api.put("/settings/zabbixApiUser",     { value: zabbixApiUser }),
+				api.put("/settings/zabbixApiPassword", { value: zabbixApiPassword }),
+			]);
+			toast.success(i18n.t("settings.success"));
+		} catch (err) {
+			toastError(err);
+		}
+	};
+
+	const handleTestZabbix = async () => {
+		setTestingZabbix(true);
+		setZabbixTestResult(null);
+		try {
+			const { data } = await api.post("/zabbix/test-connection", {
+				apiUrl:      zabbixApiUrl,
+				apiToken:    zabbixApiToken,
+				apiUser:     zabbixApiUser,
+				apiPassword: zabbixApiPassword,
+			});
+			setZabbixTestResult(data);
+		} catch {
+			setZabbixTestResult({ ok: false, message: "Error al conectar con el servidor Zabbix" });
+		} finally {
+			setTestingZabbix(false);
 		}
 	};
 
@@ -450,6 +496,141 @@ const Settings = () => {
 								color="primary"
 								size="small"
 								onClick={handleSaveSplynx}
+							>
+								{i18n.t("aiChat.settings.save")}
+							</Button>
+						</div>
+
+					</AccordionDetails>
+				</Accordion>
+
+				{/* ── Zabbix ── Accordion / submenu ───────────────────── */}
+				<Divider style={{ margin: "16px 0" }} />
+				<Typography variant="body1" className={classes.sectionTitle}>
+					📡 {i18n.t("zabbix.settings.title")}
+				</Typography>
+
+				{/* Enable/disable toggle */}
+				<Paper className={classes.paper}>
+					<Typography variant="body1">{i18n.t("zabbix.settings.enabled")}</Typography>
+					<Select
+						margin="dense"
+						variant="outlined"
+						native
+						name="zabbixEnabled"
+						value={settings.length > 0 ? getSettingValue("zabbixEnabled") : "disabled"}
+						className={classes.settingOption}
+						onChange={handleChangeSetting}
+					>
+						<option value="enabled">{i18n.t("zabbix.settings.options.enabled")}</option>
+						<option value="disabled">{i18n.t("zabbix.settings.options.disabled")}</option>
+					</Select>
+				</Paper>
+
+				{/* Credentials accordion */}
+				<Accordion className={classes.accordionRoot} defaultExpanded={false}>
+					<AccordionSummary
+						expandIcon={<ExpandMoreIcon />}
+						className={classes.accordionSummary}
+					>
+						<Typography style={{ fontWeight: 600 }}>
+							🔑 {i18n.t("zabbix.settings.credentialsTitle")}
+						</Typography>
+					</AccordionSummary>
+					<AccordionDetails className={classes.accordionDetails}>
+
+						<TextField
+							label={i18n.t("zabbix.settings.apiUrl")}
+							helperText={i18n.t("zabbix.settings.apiUrlHelper")}
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={zabbixApiUrl}
+							onChange={e => { setZabbixApiUrl(e.target.value); setZabbixTestResult(null); }}
+						/>
+
+						{/* Auth Option A: API Token */}
+						<Typography variant="caption" style={{ display: "block", color: "#6b7280", marginTop: 8 }}>
+							{i18n.t("zabbix.settings.authTokenLabel")}
+						</Typography>
+
+						<TextField
+							label={i18n.t("zabbix.settings.apiToken")}
+							helperText={i18n.t("zabbix.settings.apiTokenHelper")}
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							type={showZabbixToken ? "text" : "password"}
+							value={zabbixApiToken}
+							onChange={e => { setZabbixApiToken(e.target.value); setZabbixTestResult(null); }}
+							InputProps={{
+								endAdornment: (
+									<InputAdornment position="end">
+										<IconButton size="small" onClick={() => setShowZabbixToken(v => !v)}>
+											{showZabbixToken ? <VisibilityOffIcon /> : <VisibilityIcon />}
+										</IconButton>
+									</InputAdornment>
+								),
+							}}
+						/>
+
+						{/* Auth Option B: User / Password */}
+						<Typography variant="caption" style={{ display: "block", color: "#6b7280", marginTop: 8 }}>
+							{i18n.t("zabbix.settings.authUserLabel")}
+						</Typography>
+
+						<TextField
+							label={i18n.t("zabbix.settings.apiUser")}
+							helperText={i18n.t("zabbix.settings.apiUserHelper")}
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={zabbixApiUser}
+							onChange={e => { setZabbixApiUser(e.target.value); setZabbixTestResult(null); }}
+						/>
+
+						<TextField
+							label={i18n.t("zabbix.settings.apiPassword")}
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							type={showZabbixPwd ? "text" : "password"}
+							value={zabbixApiPassword}
+							onChange={e => { setZabbixApiPassword(e.target.value); setZabbixTestResult(null); }}
+							InputProps={{
+								endAdornment: (
+									<InputAdornment position="end">
+										<IconButton size="small" onClick={() => setShowZabbixPwd(v => !v)}>
+											{showZabbixPwd ? <VisibilityOffIcon /> : <VisibilityIcon />}
+										</IconButton>
+									</InputAdornment>
+								),
+							}}
+						/>
+
+						{/* Connection test result */}
+						{zabbixTestResult && (
+							<Typography className={zabbixTestResult.ok ? classes.testOk : classes.testFail}>
+								{zabbixTestResult.ok ? "✅" : "❌"} {zabbixTestResult.message}
+							</Typography>
+						)}
+
+						<div className={classes.btnRow}>
+							<Button
+								variant="outlined"
+								color="primary"
+								size="small"
+								disabled={testingZabbix || !zabbixApiUrl || (!zabbixApiToken && !zabbixApiUser)}
+								onClick={handleTestZabbix}
+								startIcon={testingZabbix ? <CircularProgress size={14} /> : null}
+							>
+								{testingZabbix ? i18n.t("zabbix.settings.testing") : i18n.t("zabbix.settings.testConnection")}
+							</Button>
+							<Button
+								variant="contained"
+								color="primary"
+								size="small"
+								onClick={handleSaveZabbix}
 							>
 								{i18n.t("aiChat.settings.save")}
 							</Button>
