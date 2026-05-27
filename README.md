@@ -1,8 +1,8 @@
 # ExaTicket
 
-Sistema de tickets de soporte basado en mensajes de WhatsApp, con **Chat IA de primera respuesta** e integración con **Splynx ISP Billing**.
+Sistema de tickets de soporte multicanal (**WhatsApp + Telegram**) con **Chat IA de primera respuesta** e integración con **Splynx ISP Billing**.
 
-El backend utiliza [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) o [Baileys](https://github.com/WhiskeySockets/Baileys) para recibir y enviar mensajes de WhatsApp, crear tickets y almacenarlos en una base de datos MySQL/MariaDB.
+El backend utiliza [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) o [Baileys](https://github.com/WhiskeySockets/Baileys) para WhatsApp, y [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api) para Telegram. Todos los canales crean tickets y los almacenan en MySQL/MariaDB.
 
 El frontend es una aplicación de chat multiusuario construida con React y Material UI, que se comunica con el backend mediante API REST y WebSockets.
 
@@ -14,6 +14,9 @@ El frontend es una aplicación de chat multiusuario construida con React y Mater
 
 - Múltiples usuarios atendiendo el mismo número de WhatsApp
 - Conexión a múltiples cuentas de WhatsApp en un solo lugar
+- **🤖 Bot de Telegram con IA** — recibe mensajes de Telegram, crea tickets y los atiende con el mismo pipeline de IA que WhatsApp
+- **Gestión de bots Telegram desde la UI** — página `/telegram` para agregar, editar, conectar y desconectar bots sin reiniciar
+- **Íconos de canal en lista de tickets** — badge verde WhatsApp / badge azul Telegram superpuesto en el avatar del contacto
 - **Identidad visual ExaTicket** — logo cerebro/circuito, favicon SVG, AppBar con nombre y colores propios
 - **Chat IA de soporte técnico** — la IA atiende primero y escala al operador cuando es necesario
 - **Enrutamiento IA por departamento** — la IA pregunta el área (Administración / Ventas / Soporte) antes de actuar
@@ -781,27 +784,35 @@ ExaTicket/
 │   │   ├── controllers/
 │   │   │   ├── MessageController.ts      # +agentAsk: consulta agente→IA
 │   │   │   ├── SplynxController.ts       # POST /splynx/test-connection
+│   │   │   ├── TelegramController.ts     # CRUD + connect/disconnect bots Telegram
 │   │   │   └── TicketController.ts       # +isGroup filter en listado
 │   │   ├── routes/
 │   │   │   ├── messageRoutes.ts          # POST /messages/:id/agent-ai
-│   │   │   └── settingRoutes.ts          # POST /splynx/test-connection
+│   │   │   ├── settingRoutes.ts          # POST /splynx/test-connection
+│   │   │   └── telegramRoutes.ts         # GET|POST|PUT|DELETE /telegram · /telegram/:id/connect|disconnect
 │   │   ├── services/
 │   │   │   ├── AIServices/
-│   │   │   │   └── GetAIResponse.ts      # getAIResponse(splynxContext?) · getAgentAdvice
+│   │   │   │   └── GetAIResponse.ts      # getAIResponse(splynxContext?) · getAgentAdvice · getTicketSummary
 │   │   │   ├── SplynxService/
 │   │   │   │   └── SplynxService.ts      # findCustomerByPhone · buildSplynxContext · testConnection · auth admin/api_key
+│   │   │   ├── TelegramService/
+│   │   │   │   └── TelegramBotService.ts # Polling · handleTelegramMessage · pipeline IA · sendWithTyping
 │   │   │   └── TicketServices/
-│   │   │       ├── ListTicketsService.ts # +isGroup filter
+│   │   │       ├── ListTicketsService.ts # +isGroup filter · +Telegram include
+│   │   │       ├── ShowTicketService.ts  # +Telegram include
 │   │   │       └── FindOrCreateTicketService.ts # aiActive reset al reabrir ticket
 │   │   ├── handlers/
 │   │   │   └── handleWhatsappEvents.ts   # Flujo IA: Splynx → enrutamiento → soporte → escalado
 │   │   ├── models/
-│   │   │   ├── Ticket.ts                 # Campos aiActive, aiAttempts, isGroup
+│   │   │   ├── Telegram.ts               # Modelo Telegram (id, name, botToken, status, greetingMessage)
+│   │   │   ├── Ticket.ts                 # +telegramId FK · aiActive · aiAttempts · isGroup
 │   │   │   └── Message.ts                # Campo isInternal (notas privadas)
 │   │   └── database/
+│   │       ├── index.ts                  # +Telegram registrado en Sequelize
 │   │       ├── migrations/
 │   │       │   ├── 20260521000000-add-ai-fields-to-tickets.ts
-│   │       │   └── 20260522100000-add-isInternal-to-messages.ts
+│   │       │   ├── 20260522100000-add-isInternal-to-messages.ts
+│   │       │   └── 20260527200000-create-telegrams.ts  # Tabla Telegrams + columna Tickets.telegramId
 │   │       └── seeds/
 │   │           ├── 20260521000000-add-ai-settings.ts
 │   │           └── 20260526000000-add-splynx-settings.ts
@@ -818,14 +829,16 @@ ExaTicket/
 │   │   │   ├── MessagesList/             # Renderizado de notas internas IA (fondo ámbar)
 │   │   │   ├── MessageInput/             # Botón 🤖 + panel consulta agente→IA
 │   │   │   ├── TicketActionButtons/      # Botón "Tomar control" IA
-│   │   │   ├── TicketListItem/           # Badge IA en lista tickets
+│   │   │   ├── TicketListItem/           # Badge canal (WA verde / TG azul) + badge IA
 │   │   │   └── TicketsManager/           # Pestañas: Bandeja · Resueltos · Buscar · Grupos
 │   │   ├── hooks/
 │   │   │   └── useTickets/               # +isGroup param → API
 │   │   ├── layout/
 │   │   │   ├── index.js                  # AppBar con logo + EXATICKET (blanco en modo oscuro)
-│   │   │   └── MainListItems.js          # Nav: "Chat's" en lugar de "Tickets"
-│   │   ├── pages/Settings/               # Panel IA + Panel Splynx (accordion credenciales)
+│   │   │   └── MainListItems.js          # Nav: "Chat's" · ícono Telegram en sidebar
+│   │   ├── pages/
+│   │   │   ├── Settings/                 # Panel IA + Panel Splynx (accordion credenciales)
+│   │   │   └── Telegram/                 # Gestión de bots: tabla, modal agregar/editar, connect/disconnect
 │   │   └── translate/languages/es.js     # +tickets.tabs.groups · mainDrawer.tickets="Chat's"
 │   ├── .docker/
 │   │   ├── nginx/                        # Configuración nginx
@@ -841,6 +854,28 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v1.8.0 — 2026-05-27
+- **Integración Telegram Bot** — los clientes ahora pueden abrir y gestionar tickets directamente desde Telegram
+  - Modelo `Telegram` en base de datos: `id`, `name`, `botToken`, `status` (`connected`/`disconnected`/`error`), `greetingMessage`
+  - Migración `20260527200000-create-telegrams.ts`: crea tabla `Telegrams` y columna `telegramId` en `Tickets`
+  - `TelegramBotService.ts`: polling con `node-telegram-bot-api` v0.67.0, arranque automático de todos los bots al iniciar el servidor
+  - Pipeline IA idéntico al de WhatsApp: **Fase 1** (pregunta de enrutamiento) → **Fase 2** (selección de departamento: Administración / Ventas / Soporte) → **Fase 3** (soporte IA con Anthropic Claude Haiku)
+  - Integración Splynx completa en Telegram: contexto de cliente, estado de servicio, ping en tiempo real y cortes generales
+  - Todos los mensajes entrantes Y salientes guardados en la base de datos → los agentes ven la conversación completa en la vista del ticket
+  - Escalado automático a cola de soporte cuando la IA no puede resolver, el usuario lo solicita o se alcanza el límite de intentos
+  - Nota interna con resumen del caso al escalar a un humano
+  - `TelegramController.ts`: endpoints REST `GET|POST|PUT|DELETE /telegram` y `POST /telegram/:id/connect|disconnect`
+  - `telegramRoutes.ts`: rutas protegidas con `isAuth`
+- **Página de gestión de bots Telegram** (`/telegram`)
+  - Tabla con todos los bots configurados, chip de estado (verde Conectado / gris Desconectado / rojo Error)
+  - Modal para agregar y editar bots (nombre, token, mensaje de bienvenida personalizado)
+  - Botones Conectar / Desconectar / Eliminar con confirmación para acciones destructivas
+  - Ícono Telegram en el sidebar de navegación
+- **Íconos de canal en lista de tickets**
+  - Badge circular superpuesto en el avatar de cada contacto: 🟢 verde WA para WhatsApp, 🔵 azul para Telegram
+  - Chip de nombre de conexión coloreado por canal: verde para WhatsApp, azul Telegram para bots de Telegram
+  - `ListTicketsService` y `ShowTicketService` actualizados para incluir el modelo Telegram en las consultas
 
 ### v1.7.5 — 2026-05-27
 - **Integración Zabbix API**: nuevo `ZabbixService.ts` que consulta el estado ICMP de un host en Zabbix (~100 ms vs ~4 s del ping directo)

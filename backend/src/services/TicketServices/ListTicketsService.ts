@@ -8,6 +8,7 @@ import Message from "../../models/Message";
 import Queue from "../../models/Queue";
 import ShowUserService from "../UserServices/ShowUserService";
 import Whatsapp from "../../models/Whatsapp";
+import Telegram from "../../models/Telegram";
 
 interface Request {
   searchParam?: string;
@@ -59,6 +60,12 @@ const ListTicketsService = async ({
       model: Whatsapp,
       as: "whatsapp",
       attributes: ["name"]
+    },
+    {
+      model: Telegram,
+      as: "telegram",
+      attributes: ["name"],
+      required: false
     },
     {
       model: Label,

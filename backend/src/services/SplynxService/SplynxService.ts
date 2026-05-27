@@ -162,6 +162,22 @@ const unwrap = (data: any): any => {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+/**
+ * Strict phone comparison — guards against Splynx's partial/LIKE match returning
+ * unrelated customers.
+ * Two numbers match when one is a suffix of the other AND the overlap is ≥ 8 digits.
+ * e.g.:  "18095551234" matches "8095551234" (country-code stripped)
+ *        "8095551234"  does NOT match "8095559999" (different number)
+ */
+const phonesMatch = (a: string, b: string): boolean => {
+  const na = a.replace(/\D/g, "");
+  const nb = b.replace(/\D/g, "");
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const [longer, shorter] = na.length >= nb.length ? [na, nb] : [nb, na];
+  return shorter.length >= 8 && longer.endsWith(shorter);
+};
+
 /** Search a customer by phone number (tries full and last-10-digits) */
 export const findCustomerByPhone = async (
   phone: string
@@ -172,12 +188,21 @@ export const findCustomerByPhone = async (
 
     const clean = phone.replace(/\D/g, "");
 
+    /**
+     * Ask Splynx for candidates, then validate each result against the
+     * searched number. Splynx uses a LIKE/partial match internally, so it can
+     * return customers whose number merely *contains* the digits — we must
+     * confirm the match ourselves.
+     */
     const trySearch = async (q: string): Promise<SplynxCustomer | null> => {
       const { data } = await client.get("/admin/customers/customer", {
-        params: { "search[phone]": q, items_per_page: 5 }
+        params: { "search[phone]": q, items_per_page: 10 }
       });
       const list: SplynxCustomer[] = unwrap(data);
-      return Array.isArray(list) && list.length > 0 ? list[0] : null;
+      if (!Array.isArray(list)) return null;
+
+      // Return the FIRST candidate whose stored phone actually matches
+      return list.find(c => phonesMatch(c.phone || "", q)) || null;
     };
 
     const found = await trySearch(clean);

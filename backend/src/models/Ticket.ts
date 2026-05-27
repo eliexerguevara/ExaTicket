@@ -17,6 +17,7 @@ import Contact from "./Contact";
 import Label from "./Label";
 import Message from "./Message";
 import Queue from "./Queue";
+import Telegram from "./Telegram";
 import TicketLabel from "./TicketLabel";
 import User from "./User";
 import Whatsapp from "./Whatsapp";
@@ -82,6 +83,13 @@ class Ticket extends Model<Ticket> {
 
   @BelongsTo(() => Queue)
   queue: Queue;
+
+  @ForeignKey(() => Telegram)
+  @Column
+  telegramId: number;
+
+  @BelongsTo(() => Telegram)
+  telegram: Telegram;
 
   @HasMany(() => Message)
   messages: Message[];

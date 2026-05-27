@@ -13,6 +13,7 @@ import QuickAnswer from "../models/QuickAnswer";
 import WppKey from "../models/WppKey";
 import Label from "../models/Label";
 import TicketLabel from "../models/TicketLabel";
+import Telegram from "../models/Telegram";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -34,7 +35,8 @@ const models = [
   QuickAnswer,
   WppKey,
   Label,
-  TicketLabel
+  TicketLabel,
+  Telegram
 ];
 
 sequelize.addModels(models);

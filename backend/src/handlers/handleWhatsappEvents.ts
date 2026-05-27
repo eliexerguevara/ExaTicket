@@ -449,11 +449,22 @@ const escalateToHuman = async (
   }
 };
 
+/**
+ * Simulate human typing delay before sending a WhatsApp message.
+ * This avoids the instant-bot pattern that WhatsApp flags for suspicious activity.
+ * Delay = 1200 ms base + ~28 ms/char (capped at 4 s) + 0–900 ms random jitter.
+ */
+const typingDelay = (text: string): Promise<void> => {
+  const ms = Math.min(4000, 1200 + text.length * 28) + Math.floor(Math.random() * 900);
+  return new Promise(r => setTimeout(r, ms));
+};
+
 const sendMsg = async (
   whatsappId: number,
   contactNumber: string,
   text: string
 ): Promise<void> => {
+  await typingDelay(text);
   try {
     await whatsappProvider.sendMessage(
       whatsappId,

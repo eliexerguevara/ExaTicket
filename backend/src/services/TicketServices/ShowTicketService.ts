@@ -5,6 +5,7 @@ import Label from "../../models/Label";
 import User from "../../models/User";
 import Queue from "../../models/Queue";
 import Whatsapp from "../../models/Whatsapp";
+import Telegram from "../../models/Telegram";
 
 const ShowTicketService = async (id: string | number): Promise<Ticket> => {
   const ticket = await Ticket.findByPk(id, {
@@ -29,6 +30,12 @@ const ShowTicketService = async (id: string | number): Promise<Ticket> => {
         model: Whatsapp,
         as: "whatsapp",
         attributes: ["name"]
+      },
+      {
+        model: Telegram,
+        as: "telegram",
+        attributes: ["name"],
+        required: false
       },
       {
         model: Label,

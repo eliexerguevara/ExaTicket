@@ -15,6 +15,7 @@ import Contacts from "../pages/Contacts/";
 import QuickAnswers from "../pages/QuickAnswers/";
 import Queues from "../pages/Queues/";
 import Labels from "../pages/Labels/";
+import TelegramPage from "../pages/Telegram/";
 import { AuthProvider } from "../context/Auth/AuthContext";
 import { WhatsAppsProvider } from "../context/WhatsApp/WhatsAppsContext";
 import { ThemeProvider } from "../context/DarkMode";
@@ -42,6 +43,7 @@ const Routes = () => {
                 <Route exact path="/Settings" component={Settings} isPrivate />
                 <Route exact path="/Queues" component={Queues} isPrivate />
                 <Route exact path="/labels" component={Labels} isPrivate />
+                <Route exact path="/telegram" component={TelegramPage} isPrivate />
               </LoggedInLayout>
             </WhatsAppsProvider>
           </Switch>
