@@ -269,6 +269,32 @@ export const getRouter = async (routerId: number): Promise<SplynxRouter | null> 
   }
 };
 
+/**
+ * Ping a customer IP via the Splynx server's netcheck.php endpoint.
+ * Requires the SPLYNX_PING_TOKEN env variable.
+ * Returns null when the token is missing, IP is empty, or the request fails.
+ */
+export const checkCustomerOnline = async (
+  ip: string,
+  splynxBaseUrl: string
+): Promise<{ online: boolean; latency: string | null } | null> => {
+  const token = process.env.SPLYNX_PING_TOKEN;
+  if (!token || !ip || !splynxBaseUrl) return null;
+
+  try {
+    const base = splynxBaseUrl.replace(/\/$/, "");
+    const { data } = await axios.get(`${base}/netcheck.php`, {
+      params: { token, ip },
+      timeout: 8000
+    });
+    if (typeof data?.online !== "boolean") return null;
+    return { online: data.online, latency: data.latency ?? null };
+  } catch (err) {
+    logger.warn({ info: `Splynx: ping check failed for IP ${ip}` });
+    return null;
+  }
+};
+
 /** Check if there is an active "Falla General" ticket in Splynx.
  *  Validates client-side to avoid false positives when the API
  *  doesn't support or ignores the subject filter. */
@@ -385,11 +411,12 @@ export const buildSplynxContext = async (
       };
     }
 
-    // Fetch all data in parallel
-    const [services, tickets, generalOutage] = await Promise.all([
+    // Fetch all data in parallel (apiUrl needed for ping endpoint)
+    const [services, tickets, generalOutage, apiUrl] = await Promise.all([
       getCustomerServices(customer.id),
       getCustomerTickets(customer.id),
-      checkGeneralOutage()
+      checkGeneralOutage(),
+      CheckSettings("splynxApiUrl").catch(() => "")
     ]);
 
     const lines: string[] = [
@@ -447,34 +474,55 @@ export const buildSplynxContext = async (
         const svc = activeServices[0];
         const sector = parseSector(svc.login);
 
-        // Try to get router info for context
+        // Run router lookup and ping check in parallel
+        const [router, pingResult] = await Promise.all([
+          (svc.router_id && svc.router_id > 0)
+            ? getRouter(svc.router_id).catch(() => null)
+            : Promise.resolve(null),
+          (svc.ipv4 && apiUrl)
+            ? checkCustomerOnline(svc.ipv4, apiUrl).catch(() => null)
+            : Promise.resolve(null)
+        ]);
+
         let routerInfo = "";
-        if (svc.router_id && svc.router_id > 0) {
-          try {
-            const router = await getRouter(svc.router_id);
-            if (router) {
-              routerInfo = `${router.title || "Nodo desconocido"}` +
-                (router.ip ? ` (IP: ${router.ip})` : "");
-            }
-          } catch {
-            // ignore
-          }
+        if (router) {
+          routerInfo = `${router.title || "Nodo desconocido"}` +
+            (router.ip ? ` (IP: ${router.ip})` : "");
         }
         if (!routerInfo && sector) {
           routerInfo = `Sector ${sector}`;
         }
 
-        lines.push(
+        // Build ping status line
+        let pingLine = "";
+        if (pingResult !== null) {
+          pingLine = pingResult.online
+            ? `  🟢 PING ONLINE — equipo respondiendo en red (latencia: ${pingResult.latency || "N/A"})`
+            : `  🔴 PING: Sin respuesta — equipo posiblemente offline o sin señal`;
+        }
+
+        const diagLines = [
           "DIAGNÓSTICO:",
           `  ✅ Servicio ACTIVO en Splynx — el servicio está habilitado y configurado.`,
-          routerInfo
-            ? `  Nodo/Router del cliente: ${routerInfo}`
-            : "",
-          `  INSTRUCCIÓN: El servicio está activo en nuestra red. El problema está del lado del cliente`,
-          `  (equipo del cliente, cables, WiFi, configuración del router doméstico).`,
-          `  Continúa con troubleshooting del equipo del cliente.`,
-          ""
-        );
+          routerInfo ? `  Nodo/Router del cliente: ${routerInfo}` : "",
+          pingLine
+        ].filter(Boolean);
+
+        if (pingResult !== null && !pingResult.online) {
+          diagLines.push(
+            `  INSTRUCCIÓN: El equipo del cliente NO responde ping desde la red.`,
+            `  Posibles causas: equipo apagado, cable desconectado, o falla en la última milla.`,
+            `  Pide al cliente que revise si el router/ONT tiene luz encendida y reinicia el equipo.`
+          );
+        } else {
+          diagLines.push(
+            `  INSTRUCCIÓN: El servicio está activo en nuestra red. El problema está del lado del cliente`,
+            `  (equipo del cliente, cables, WiFi, configuración del router doméstico).`,
+            `  Continúa con troubleshooting del equipo del cliente.`
+          );
+        }
+        diagLines.push("");
+        lines.push(...diagLines);
       } else if (primaryService) {
         // Service exists but is disabled/inactive
         const svc = primaryService;

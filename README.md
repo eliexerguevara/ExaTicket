@@ -368,6 +368,7 @@ Cuando un cliente escribe, ExaTicket busca al cliente en Splynx por número de t
 | Plan contratado y velocidad | Ayuda a diagnosticar problemas de velocidad |
 | Tickets abiertos en Splynx | Evita crear duplicados; da contexto del historial |
 | Corte general (todos los servicios caídos) | Detecta incidentes masivos y avisa al cliente antes de hacer diagnóstico individual |
+| **Ping en tiempo real al equipo del cliente** | Confirma si el CPE/router del cliente responde desde la red del ISP |
 
 ### Reglas de comportamiento IA con Splynx
 
@@ -375,6 +376,86 @@ Cuando un cliente escribe, ExaTicket busca al cliente en Splynx por número de t
 2. **Servicio bloqueado/suspendido** → La IA indica que la cuenta tiene una restricción y dirige al cliente al área de administración/pagos
 3. **Ticket abierto en Splynx** → La IA menciona que ya hay un caso registrado y da seguimiento
 4. **Cliente no encontrado** → La IA continúa sin contexto Splynx (degradación elegante)
+5. **Equipo NO responde ping** → La IA dirige al cliente a verificar luces del ONT/router y pide reinicio del equipo
+6. **Equipo SÍ responde ping** → La IA asume problema del lado del cliente (WiFi, cable interno, dispositivo) y hace troubleshooting local
+
+### Verificación de conectividad en tiempo real (ping check)
+
+ExaTicket puede hacer ping al equipo del cliente directamente desde el servidor Splynx para confirmar si el CPE/ONT responde antes de dar instrucciones de troubleshooting.
+
+#### Cómo funciona
+
+1. La IA obtiene la IP del servicio (`ipv4`) desde la API de Splynx
+2. ExaTicket llama a un endpoint PHP (`netcheck.php`) instalado en el servidor Splynx
+3. El endpoint ejecuta `ping -c 2 -W 2 <IP>` y devuelve `{"online": true/false, "latency": "Xms"}`
+4. El resultado se inyecta en el contexto de la IA: 🟢 ONLINE o 🔴 Sin respuesta
+
+#### Configuración
+
+**Paso 1 — Desplegar `netcheck.php` en el servidor Splynx**
+
+Crea el archivo `/var/www/splynx/web/netcheck.php` en tu servidor Splynx con el siguiente contenido. Elige un token aleatorio seguro:
+
+```php
+<?php
+$ALLOWED_TOKEN = 'TU_TOKEN_SECRETO_AQUI';  // Cambiar por un token seguro
+
+// Auth check
+$token = $_GET['token'] ?? '';
+if (!hash_equals($ALLOWED_TOKEN, $token)) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit;
+}
+
+// IP validation — only RFC-1918 and your ISP's public range
+$ip = $_GET['ip'] ?? '';
+if (!preg_match('/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|TU_RANGO_PUBLICO\.)/', $ip)) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid IP']);
+    exit;
+}
+
+$escaped = escapeshellarg($ip);
+$output = shell_exec("ping -n -c 2 -W 2 $escaped 2>/dev/null");
+$online = $output && strpos($output, ' 0% packet loss') !== false;
+
+preg_match('/time=(\d+\.?\d*) ms/', $output ?? '', $m);
+$latency = isset($m[1]) ? $m[1] . 'ms' : null;
+if (!$latency) {
+    preg_match('/rtt min.*= [\d.]+\/([\d.]+)/', $output ?? '', $m2);
+    $latency = isset($m2[1]) ? $m2[1] . 'ms' : null;
+}
+
+header('Content-Type: application/json');
+echo json_encode([
+    'online' => $online,
+    'ip' => $ip,
+    'latency' => $latency,
+    'checked_at' => date('c')
+]);
+```
+
+**Paso 2 — Probar el endpoint desde el servidor ExaTicket**
+
+```bash
+curl "https://splynx.tuisp.com/netcheck.php?token=TU_TOKEN&ip=10.1.0.1"
+# Respuesta esperada: {"online":true,"ip":"10.1.0.1","latency":"15ms","checked_at":"..."}
+```
+
+**Paso 3 — Agregar el token a `.env` del servidor ExaTicket**
+
+```bash
+# En el servidor de producción (NO en git):
+echo "SPLYNX_PING_TOKEN=TU_TOKEN_SECRETO_AQUI" >> /root/ExaTicket/.env
+docker compose restart backend
+```
+
+> **Seguridad:** El token nunca debe quedar en el repositorio git. La variable `SPLYNX_PING_TOKEN` está en `.gitignore` vía el archivo `.env`.
+
+> **Alcance de red:** El ping funciona solo si el servidor Splynx tiene rutas de red hacia las IPs de los clientes. Si usas rangos privados (`10.x.x.x`, `192.168.x.x`) asegúrate de que el servidor Splynx esté en la misma red o tenga rutas estáticas configuradas.
+
+> **Sin token configurado:** Si `SPLYNX_PING_TOKEN` está vacío, el ping check se omite silenciosamente y la IA continúa sin información de ping (degradación elegante).
 
 ### Métodos de autenticación
 
@@ -711,6 +792,32 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v1.7.4 — 2026-05-27
+- **Ping check en tiempo real**: la IA ahora sabe si el equipo del cliente responde desde la red del ISP antes de hacer troubleshooting
+  - Nueva función `checkCustomerOnline(ip, splynxBaseUrl)` en `SplynxService.ts` — llama a `netcheck.php` en el servidor Splynx
+  - Resultado inyectado en el contexto IA: 🟢 ONLINE (con latencia) o 🔴 Sin respuesta
+  - Si el equipo no responde: instrucción al agente IA de pedir al cliente que revise luces del ONT y reinicie
+  - Si el equipo responde: instrucción para troubleshooting del lado del cliente (WiFi, cables, dispositivo)
+  - Router lookup y ping check corren en paralelo (no añaden latencia extra al tiempo de respuesta)
+  - Degradación elegante: si `SPLYNX_PING_TOKEN` no está configurado, el ping se omite sin error
+- **Nueva variable de entorno**: `SPLYNX_PING_TOKEN` en `.env` y `.env.example` (sin valor — debe configurarse en el servidor)
+- **Documentación**: sección "Verificación de conectividad en tiempo real" con instrucciones completas de despliegue de `netcheck.php`
+
+### v1.7.3 — 2026-05-27
+- **Saludo "Encontré tu servicio"**: la primera respuesta de la IA en fase de soporte saluda al cliente por nombre y confirma que encontró su servicio en Splynx
+- **Diagnóstico de servicio desactivado**: cuando el servicio está suspendido o inactivo, la IA informa el estado y el nodo/router asignado
+- **Información de router/nodo**: `getRouter(routerId)` consulta detalles del dispositivo NAS — nombre, IP de gestión, sector PPPoE
+- **`SplynxContextResult`**: `buildSplynxContext` retorna `{ context, hasOutage, customerId }` en lugar de string plano
+- **`isFirstMessage`**: parámetro booleano en `buildSplynxContext` — activa el bloque de saludo solo en el primer mensaje de soporte
+- **Fix interfaz `SplynxInternetService`**: eliminados campos `online` y `last_online` que no existen en la API real; uso de `status === "active"` como indicador de servicio habilitado
+
+### v1.7.2 — 2026-05-27
+- **Visibilidad de grupos para admin**: los usuarios admin ven TODOS los grupos activos (bug: antes se filtraban por `userId`/`queueId`)
+- **Detección de caso resuelto mejorada**: instrucción IA con ejemplos explícitos de frases en tiempo PRESENTE vs pasado; añadida detección por palabras clave en el backend como red de seguridad
+- **Ticket Splynx automático al cerrar caso**: cuando el cliente confirma que su servicio funciona (por IA o por palabras clave), se crea automáticamente un ticket `solved` en Splynx con resumen generado por IA
+- **Fix falso positivo "Falla General"**: `checkGeneralOutage` ahora valida el asunto del ticket del lado del cliente para evitar que tickets no relacionados disparen el aviso de corte masivo
+- **`RESOLUTION_KEYWORDS`**: 22 frases en tiempo presente que activan cierre directo sin esperar a la IA (p.ej. "ya funciona", "ya tengo internet", "volvió el internet")
 
 ### v1.7.1 — 2026-05-26
 - **Fix Splynx REST API**: corregidos todos los endpoints de la integración Splynx para que funcionen con la REST API v2 estándar:
