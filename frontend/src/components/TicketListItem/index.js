@@ -81,18 +81,19 @@ const useStyles = makeStyles(theme => ({
 
 	contactNameWrapper: {
 		display: "flex",
-		justifyContent: "space-between",
+		alignItems: "center",
+		gap: 4,
 	},
 
 	lastMessageTime: {
-		justifySelf: "flex-end",
+		flexShrink: 0,
+		marginLeft: "auto",
 	},
 
 	closedBadge: {
 		alignSelf: "center",
-		justifySelf: "flex-end",
-		marginRight: 32,
-		marginLeft: "auto",
+		flexShrink: 0,
+		marginRight: 8,
 	},
 
 	contactLastMessage: {
@@ -145,8 +146,8 @@ const useStyles = makeStyles(theme => ({
 		position: "absolute",
 		bottom: 1,
 		right: 1,
-		width: 16,
-		height: 16,
+		width: 18,
+		height: 18,
 		borderRadius: "50%",
 		display: "flex",
 		alignItems: "center",
@@ -163,22 +164,24 @@ const useStyles = makeStyles(theme => ({
 		background: "#2CA5E0",
 	},
 
-	userTag: {
-		position: "absolute",
-		marginRight: 5,
-		right: 5,
-		bottom: 5,
-		background: "#25D366",
-		color: "#ffffff",
-		border: "1px solid #CCC",
-		padding: 1,
-		paddingLeft: 5,
-		paddingRight: 5,
-		borderRadius: 10,
-		fontSize: "0.9em"
+	channelChip: {
+		display: "inline-flex",
+		alignItems: "center",
+		padding: "1px 5px",
+		borderRadius: 4,
+		fontSize: "0.68em",
+		fontWeight: 700,
+		color: "#fff",
+		lineHeight: 1.6,
+		letterSpacing: "0.02em",
+		flexShrink: 0,
 	},
 
-	telegramTag: {
+	waChip: {
+		background: "#25D366",
+	},
+
+	tgChip: {
 		background: "#2CA5E0",
 	},
 
@@ -418,12 +421,30 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 							>
 								{ticket.contact.name}
 							</Typography>
+							{ticket.whatsappId && (
+								<span className={clsx(classes.channelChip, classes.waChip)} title={ticket.whatsapp?.name || "WhatsApp"}>
+									WA
+								</span>
+							)}
+							{ticket.telegramId && (
+								<span className={clsx(classes.channelChip, classes.tgChip)} title={ticket.telegram?.name || "Telegram"}>
+									TG
+								</span>
+							)}
 							{ticket.status === "closed" && (
 								<Badge
 									className={classes.closedBadge}
 									badgeContent={"closed"}
 									color="primary"
 								/>
+							)}
+							{ticket.aiActive && !ticket.isGroup && ticket.status !== "closed" && (
+								<Tooltip title={i18n.t("aiChat.aiHandling")}>
+									<div className={classes.aiTag}>
+										<Android style={{ fontSize: 11 }} />
+										IA
+									</div>
+								</Tooltip>
 							)}
 							{ticket.lastMessage && (
 								<Typography
@@ -438,24 +459,6 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 										<>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
 									)}
 								</Typography>
-							)}
-							{ticket.aiActive && !ticket.isGroup && (
-								<Tooltip title={i18n.t("aiChat.aiHandling")}>
-									<div className={classes.aiTag}>
-										<Android style={{ fontSize: 11 }} />
-										IA
-									</div>
-								</Tooltip>
-							)}
-							{ticket.whatsappId && (
-								<div className={classes.userTag} title={i18n.t("ticketsList.connectionTitle")}>
-									{ticket.whatsapp?.name}
-								</div>
-							)}
-							{ticket.telegramId && (
-								<div className={clsx(classes.userTag, classes.telegramTag)} title="Bot de Telegram">
-									{ticket.telegram?.name || "Telegram"}
-								</div>
 							)}
 						</span>
 					}
