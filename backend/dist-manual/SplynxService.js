@@ -326,36 +326,55 @@ const checkGeneralOutage = () => __awaiter(void 0, void 0, void 0, function* () 
     }
 });
 exports.checkGeneralOutage = checkGeneralOutage;
-/** Create a support ticket in Splynx */
+/** Create a support ticket in Splynx via the PHP bridge (bypasses broken REST API v2) */
 const createSplynxTicket = (customerId, subject, message, priority = "medium", status = "new") => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const client = yield buildClient();
-        if (!client)
-            return null;
-        // Splynx's TicketsController.php uses Model::load() which expects form-encoded POST data,
-        // NOT a JSON body. Sending JSON causes a 500 "string given" PHP error.
-        // Use URLSearchParams to send application/x-www-form-urlencoded.
+        let enabled = false;
+        try {
+            enabled = (yield (0, CheckSettings_1.default)("splynxEnabled")) === "enabled";
+        }
+        catch (_a) { return null; }
+        if (!enabled) return null;
+        let apiUrl = "";
+        try {
+            apiUrl = ((yield (0, CheckSettings_1.default)("splynxApiUrl")) || "").replace(/\/$/, "");
+        }
+        catch (_b) { return null; }
+        if (!apiUrl) return null;
+        // Map status string → status_id integer for the bridge
+        const statusMap = { "new": 1, "open": 1, "wip": 2, "work_in_progress": 2, "waiting_customer": 4, "waiting_agent": 5, "closed": 3, "resolved": 3, "solved": 3 };
+        const status_id = statusMap[status] !== undefined ? statusMap[status] : 3;
+        const https = require("https");
+        const agent = new https.Agent({ rejectUnauthorized: false });
         const formData = new URLSearchParams();
+        formData.append("token", "exaticket-splynx-bridge-4f8a2c9e");
         formData.append("customer_id", String(customerId));
         formData.append("subject", subject);
-        formData.append("message", message);
+        formData.append("message", message || "");
         formData.append("priority", priority);
-        formData.append("status", status);
-        logger_1.logger.info({ customer_id: customerId, subject, priority, status }, "Splynx: creating ticket (form-encoded)");
-        const { data } = yield client.post("/admin/support/tickets", formData, {
-            headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        formData.append("status_id", String(status_id));
+        formData.append("admin_id", "10");
+        const bridgeUrl = `${apiUrl}/exaticket_ticket.php`;
+        logger_1.logger.info({ customer_id: customerId, subject, priority, status, status_id, bridgeUrl }, "Splynx: creating ticket via bridge");
+        const { data } = yield axios_1.default.post(bridgeUrl, formData, {
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            httpsAgent: agent,
+            timeout: 10000
         });
-        const ticket = unwrap(data);
-        logger_1.logger.info(`Splynx: ticket created id=${ticket === null || ticket === void 0 ? void 0 : ticket.id} status=${status} for customer ${customerId}`);
-        return ticket || null;
+        if (data && data.success && data.ticket_id) {
+            logger_1.logger.info(`Splynx: ticket created via bridge id=${data.ticket_id} status_id=${status_id} for customer ${customerId}`);
+            return { id: data.ticket_id };
+        }
+        logger_1.logger.warn({ data }, "Splynx: bridge returned unexpected response");
+        return null;
     }
     catch (err) {
         var _resp = err === null || err === void 0 ? void 0 : err.response;
         logger_1.logger.error({
             msg: err === null || err === void 0 ? void 0 : err.message,
             httpStatus: _resp === null || _resp === void 0 ? void 0 : _resp.status,
-            splynxError: _resp === null || _resp === void 0 ? void 0 : _resp.data
-        }, "Splynx: createSplynxTicket error");
+            bridgeError: _resp === null || _resp === void 0 ? void 0 : _resp.data
+        }, "Splynx: createSplynxTicket bridge error");
         return null;
     }
 });

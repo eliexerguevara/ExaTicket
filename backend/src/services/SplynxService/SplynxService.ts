@@ -402,42 +402,63 @@ export const checkGeneralOutage = async (): Promise<SplynxTicket | null> => {
   }
 };
 
-/** Create a support ticket in Splynx */
+/** Create a support ticket in Splynx via the PHP bridge (bypasses broken REST API v2) */
 export const createSplynxTicket = async (
   customerId: number,
   subject: string,
   message: string,
   priority: "low" | "medium" | "high" | "critical" = "medium",
-  status: "new" | "open" | "solved" | "closed" = "new"
-): Promise<SplynxTicket | null> => {
+  status: "new" | "open" | "solved" | "closed" | "wip" | "resolved" = "new"
+): Promise<{ id: number } | null> => {
   try {
-    const client = await buildClient();
-    if (!client) return null;
+    let enabled = false;
+    try { enabled = (await CheckSettings("splynxEnabled")) === "enabled"; } catch { return null; }
+    if (!enabled) return null;
 
-    // Splynx's TicketsController.php uses Model::load() which expects form-encoded POST data,
-    // NOT a JSON body. Sending JSON causes a 500 "string given" PHP error.
-    // Use URLSearchParams to send application/x-www-form-urlencoded.
+    let apiUrl = "";
+    try { apiUrl = ((await CheckSettings("splynxApiUrl")) || "").replace(/\/$/, ""); } catch { return null; }
+    if (!apiUrl) return null;
+
+    // Map status string → status_id integer for the bridge
+    const statusMap: Record<string, number> = {
+      new: 1, open: 1, wip: 2, work_in_progress: 2,
+      waiting_customer: 4, waiting_agent: 5,
+      closed: 3, resolved: 3, solved: 3
+    };
+    const status_id = statusMap[status] !== undefined ? statusMap[status] : 3;
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const https = require("https");
+    const agent = new https.Agent({ rejectUnauthorized: false });
+
     const formData = new URLSearchParams();
+    formData.append("token", "exaticket-splynx-bridge-4f8a2c9e");
     formData.append("customer_id", String(customerId));
     formData.append("subject", subject);
-    formData.append("message", message);
+    formData.append("message", message || "");
     formData.append("priority", priority);
-    formData.append("status", status);
+    formData.append("status_id", String(status_id));
+    formData.append("admin_id", "10");
 
-    logger.info({ customer_id: customerId, subject, priority, status }, "Splynx: creating ticket (form-encoded)");
+    const bridgeUrl = `${apiUrl}/exaticket_ticket.php`;
+    logger.info({ customer_id: customerId, subject, priority, status, status_id, bridgeUrl }, "Splynx: creating ticket via bridge");
 
-    const { data } = await client.post("/admin/support/tickets", formData, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    const { data } = await axios.post(bridgeUrl, formData, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      httpsAgent: agent,
+      timeout: 10000
     });
-    const ticket = unwrap(data);
-    logger.info(
-      `Splynx: ticket created id=${ticket?.id} status=${status} for customer ${customerId}`
-    );
-    return ticket || null;
+
+    if (data && data.success && data.ticket_id) {
+      logger.info(`Splynx: ticket created via bridge id=${data.ticket_id} status_id=${status_id} for customer ${customerId}`);
+      return { id: data.ticket_id };
+    }
+    logger.warn({ data }, "Splynx: bridge returned unexpected response");
+    return null;
   } catch (err: any) {
     logger.error(
-      { msg: err?.message, httpStatus: err?.response?.status, splynxError: err?.response?.data },
-      "Splynx: createSplynxTicket error"
+      { msg: err?.message, httpStatus: err?.response?.status, bridgeError: err?.response?.data },
+      "Splynx: createSplynxTicket bridge error"
     );
     return null;
   }
