@@ -408,26 +408,43 @@ export const createSplynxTicket = async (
   subject: string,
   message: string,
   priority: "low" | "medium" | "high" | "critical" = "medium",
-  status: "open" | "solved" | "closed" = "open"
+  status: "new" | "open" | "solved" | "closed" = "new"
 ): Promise<SplynxTicket | null> => {
   try {
     const client = await buildClient();
     if (!client) return null;
 
-    const { data } = await client.post("/admin/support/tickets", {
-      customer_id: customerId,
-      subject,
-      message,
-      priority,
-      status
-    });
+    // Splynx rejects creating tickets with terminal statuses ("solved"/"closed").
+    // Create with "new" first, then update the status.
+    const createStatus = (status === "solved" || status === "closed") ? "new" : status;
+    const payload = { customer_id: customerId, subject, message, priority, status: createStatus };
+    logger.info({ payload }, "Splynx: creating ticket");
+
+    const { data } = await client.post("/admin/support/tickets", payload);
     const ticket = unwrap(data);
     logger.info(
-      `Splynx: ticket created id=${ticket?.id} status=${status} for customer ${customerId}`
+      `Splynx: ticket created id=${ticket?.id} status=${createStatus} for customer ${customerId}`
     );
+
+    // Update to final status if it was a terminal state
+    if (ticket?.id && (status === "solved" || status === "closed")) {
+      try {
+        await client.put(`/admin/support/tickets/${ticket.id}`, { status });
+        logger.info(`Splynx: ticket ${ticket.id} status updated to ${status}`);
+      } catch (updateErr: any) {
+        logger.warn(
+          { httpStatus: updateErr?.response?.status, data: updateErr?.response?.data },
+          `Splynx: ticket created but status update to ${status} failed`
+        );
+      }
+    }
+
     return ticket || null;
-  } catch (err) {
-    logger.error(err, "Splynx: createSplynxTicket error");
+  } catch (err: any) {
+    logger.error(
+      { msg: err?.message, httpStatus: err?.response?.status, splynxError: err?.response?.data },
+      "Splynx: createSplynxTicket error"
+    );
     return null;
   }
 };

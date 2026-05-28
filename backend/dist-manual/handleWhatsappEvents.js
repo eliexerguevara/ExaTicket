@@ -100,8 +100,12 @@ const createSplynxResolutionTicket = (customerId, ticketId) => __awaiter(void 0,
         const body = summary
             ? `Caso resuelto vía soporte WhatsApp.\n\nResumen:\n${summary}`
             : "Caso resuelto vía soporte WhatsApp.";
-        yield createSplynxTicket(customerId, subject, body, "low", "solved");
-        logger_1.logger.info(`Splynx resolution ticket created for customer ${customerId} (exaticket ${ticketId})`);
+        const result = yield createSplynxTicket(customerId, subject, body, "low", "closed");
+        if (result && result.id) {
+            logger_1.logger.info(`Splynx resolution ticket created (id=${result.id}) for customer ${customerId} (exaticket ${ticketId})`);
+        } else {
+            logger_1.logger.warn(`Splynx: createSplynxResolutionTicket returned null for customer ${customerId} (exaticket ${ticketId})`);
+        }
     }
     catch (err) {
         logger_1.logger.error(err, `Error creating Splynx resolution ticket for ticket ${ticketId}`);

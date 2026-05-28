@@ -327,24 +327,44 @@ const checkGeneralOutage = () => __awaiter(void 0, void 0, void 0, function* () 
 });
 exports.checkGeneralOutage = checkGeneralOutage;
 /** Create a support ticket in Splynx */
-const createSplynxTicket = (customerId, subject, message, priority = "medium", status = "open") => __awaiter(void 0, void 0, void 0, function* () {
+const createSplynxTicket = (customerId, subject, message, priority = "medium", status = "new") => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const client = yield buildClient();
         if (!client)
             return null;
-        const { data } = yield client.post("/admin/support/tickets", {
+        // Splynx does not allow creating tickets with terminal statuses ("solved"/"closed").
+        // Map them to "new" so the ticket is at least recorded, then close it right after.
+        const createStatus = (status === "solved" || status === "closed") ? "new" : status;
+        const payload = {
             customer_id: customerId,
             subject,
             message,
             priority,
-            status
-        });
+            status: createStatus
+        };
+        logger_1.logger.info({ payload }, "Splynx: creating ticket");
+        const { data } = yield client.post("/admin/support/tickets", payload);
         const ticket = unwrap(data);
-        logger_1.logger.info(`Splynx: ticket created id=${ticket === null || ticket === void 0 ? void 0 : ticket.id} status=${status} for customer ${customerId}`);
+        logger_1.logger.info(`Splynx: ticket created id=${ticket === null || ticket === void 0 ? void 0 : ticket.id} status=${createStatus} for customer ${customerId}`);
+        // If the caller wanted the ticket closed/solved, update the status now
+        if (ticket && ticket.id && (status === "solved" || status === "closed")) {
+            try {
+                yield client.put(`/admin/support/tickets/${ticket.id}`, { status });
+                logger_1.logger.info(`Splynx: ticket ${ticket.id} status updated to ${status}`);
+            } catch (updateErr) {
+                var _r = updateErr === null || updateErr === void 0 ? void 0 : updateErr.response;
+                logger_1.logger.warn({ status: _r === null || _r === void 0 ? void 0 : _r.status, data: _r === null || _r === void 0 ? void 0 : _r.data }, `Splynx: ticket created but status update to ${status} failed`);
+            }
+        }
         return ticket || null;
     }
     catch (err) {
-        logger_1.logger.error(err, "Splynx: createSplynxTicket error");
+        var _resp = err === null || err === void 0 ? void 0 : err.response;
+        logger_1.logger.error({
+            msg: err === null || err === void 0 ? void 0 : err.message,
+            httpStatus: _resp === null || _resp === void 0 ? void 0 : _resp.status,
+            splynxError: _resp === null || _resp === void 0 ? void 0 : _resp.data
+        }, "Splynx: createSplynxTicket error");
         return null;
     }
 });

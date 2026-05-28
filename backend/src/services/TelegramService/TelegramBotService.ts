@@ -184,13 +184,18 @@ const createSplynxResolutionTicket = async (
     const dateStr = new Date().toLocaleDateString("es", {
       day: "2-digit", month: "2-digit", year: "numeric"
     });
-    await createSplynxTicket(
+    const result = await createSplynxTicket(
       customerId,
       `Soporte Telegram ${dateStr}`,
       summary ? `Caso resuelto vía Telegram.\n\nResumen:\n${summary}` : "Caso resuelto vía Telegram.",
       "low",
-      "solved"
+      "closed"
     );
+    if (result?.id) {
+      logger.info(`Splynx: resolution ticket created (id=${result.id}) for Telegram ticket ${ticketId}`);
+    } else {
+      logger.warn(`Splynx: createSplynxResolutionTicket returned null for Telegram ticket ${ticketId}`);
+    }
   } catch (err) {
     logger.error(err, `Error creating Splynx resolution ticket for Telegram ticket ${ticketId}`);
   }
