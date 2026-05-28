@@ -120,19 +120,20 @@ const useStyles = makeStyles(theme => ({
 	},
 
 	pendingRoundBtn: {
-		width: 30,
-		height: 30,
+		width: 28,
+		height: 28,
 		padding: 0,
 		borderRadius: "50%",
 		color: "#fff",
+		boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
 		"&:hover": {
-			opacity: 0.85,
+			opacity: 0.88,
 		},
 	},
 
 	pendingBtnPreview: {
-		backgroundColor: "#25D366",
-		"&:hover": { backgroundColor: "#1aad4d" },
+		backgroundColor: "#2563eb",
+		"&:hover": { backgroundColor: "#1d4ed8" },
 	},
 
 	pendingBtnPass: {
@@ -354,9 +355,9 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 		history.push(`/tickets/${id}`);
 	};
 
-	const handlePassTicket = async id => {
+	const handleDeleteTicket = async id => {
 		try {
-			await api.put(`/tickets/${id}`, { status: "pending", userId: null });
+			await api.delete(`/tickets/${id}`);
 		} catch (err) {
 			toastError(err);
 		}
@@ -479,16 +480,16 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 											className={clsx(classes.pendingRoundBtn, classes.pendingBtnPreview)}
 											onClick={handleOpenPreview}
 										>
-											<SearchIcon style={{ fontSize: 15 }} />
+											<SearchIcon style={{ fontSize: 16 }} />
 										</IconButton>
 									</Tooltip>
-									<Tooltip title="Pasar">
+									<Tooltip title="Borrar chat">
 										<IconButton
 											size="small"
 											className={clsx(classes.pendingRoundBtn, classes.pendingBtnPass)}
-											onClick={e => { e.stopPropagation(); handlePassTicket(ticket.id); }}
+											onClick={e => { e.stopPropagation(); handleDeleteTicket(ticket.id); }}
 										>
-											<CloseIcon style={{ fontSize: 15 }} />
+											<CloseIcon style={{ fontSize: 16 }} />
 										</IconButton>
 									</Tooltip>
 									<Tooltip title="Aceptar">
@@ -500,7 +501,7 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 										>
 											{loading
 												? <CircularProgress size={13} style={{ color: "#fff" }} />
-												: <CheckCircleOutlineIcon style={{ fontSize: 15 }} />}
+												: <CheckCircleOutlineIcon style={{ fontSize: 16 }} />}
 										</IconButton>
 									</Tooltip>
 								</span>

@@ -10,6 +10,47 @@ El frontend es una aplicación de chat multiusuario construida con React y Mater
 
 ---
 
+## ⚡ Instalación rápida (5 pasos)
+
+> Requisito único: tener **Docker** instalado. Si no lo tienes, ve a la sección [Instalación de Docker](#instalación-de-docker-en-ubuntu) más abajo.
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/eliexerguevara/ExaTicket.git
+cd ExaTicket
+
+# 2. Crear el archivo de configuración
+cp .env.example .env
+```
+
+Abre el `.env` y cambia **solo estas 3 líneas** obligatorias:
+
+```bash
+MYSQL_ROOT_PASSWORD=pon_aqui_una_contraseña_segura
+BACKEND_URL=http://TU_IP_PUBLICA
+FRONTEND_URL=http://TU_IP_PUBLICA:3000
+```
+
+```bash
+# 3. Generar los JWT secrets (copia cada resultado en JWT_SECRET y JWT_REFRESH_SECRET del .env)
+openssl rand -hex 32
+openssl rand -hex 32
+
+# 4. Construir e iniciar (primera vez tarda ~20 min)
+docker compose up --build -d
+
+# 5. Crear el usuario admin (solo una vez, espera que el backend diga "Server started")
+docker exec exaticket-backend-1 npx sequelize db:seed:all
+```
+
+✅ **Listo.** Abre `http://TU_IP_PUBLICA:3000` con:
+- **Email:** `admin@whaticket.com`
+- **Contraseña:** `admin`
+
+> Cambia la contraseña inmediatamente en Configuración → Usuarios.
+
+---
+
 ## Características
 
 - Múltiples usuarios atendiendo el mismo número de WhatsApp
@@ -855,6 +896,15 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v1.9.2 — 2026-05-28
+
+- **Botón X en tickets pendientes borra el chat** — al hacer clic en la X roja en un ticket pendiente se ejecuta `DELETE /tickets/:id`, eliminando el ticket completamente de la base de datos
+- **Colores de botones pendientes mejorados** — el botón de lupa (ver conversación) ahora es azul (`#2563eb`) para diferenciarse claramente del botón de aceptar (verde); los 3 botones son ahora: 🔵 azul lupa / 🔴 rojo X / 🟢 verde check
+- **Modo oscuro aplicado al chat** — `MessagesList`, `MessageInput` y `TicketHeader` usan la paleta oscura de WhatsApp Web (`#0b141a` fondo, `#202c33` burbujas recibidas, `#005c4b` burbujas enviadas)
+- **Badge IA ocultado en tickets cerrados y pendientes** — el badge morado "IA" solo aparece en tickets abiertos activos
+- **Chips WA/TG en lista de tickets** — chips de color inline junto al nombre del contacto y badge de canal superpuesto en el avatar
+- **Resumen IA limitado a últimas 12 horas** — al documentar un caso en Splynx, la IA solo resume los mensajes de las últimas 12 horas e incluye la hora en que el cliente reportó el problema
 
 ### v1.9.0 — 2026-05-28
 
