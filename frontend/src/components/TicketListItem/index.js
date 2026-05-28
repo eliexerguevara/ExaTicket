@@ -111,21 +111,38 @@ const useStyles = makeStyles(theme => ({
 		backgroundColor: green[500],
 	},
 
-	pendingButtons: {
+	pendingActions: {
 		display: "flex",
 		alignItems: "center",
-		gap: 6,
-		paddingTop: 2,
+		gap: 5,
+		marginLeft: "auto",
+		flexShrink: 0,
 	},
 
-	previewBtn: {
-		padding: 4,
-		color: theme.palette.primary.main,
-		border: `1px solid ${theme.palette.primary.main}`,
-		borderRadius: 4,
+	pendingRoundBtn: {
+		width: 30,
+		height: 30,
+		padding: 0,
+		borderRadius: "50%",
+		color: "#fff",
 		"&:hover": {
-			backgroundColor: theme.palette.primary.main + "14",
+			opacity: 0.85,
 		},
+	},
+
+	pendingBtnPreview: {
+		backgroundColor: "#25D366",
+		"&:hover": { backgroundColor: "#1aad4d" },
+	},
+
+	pendingBtnPass: {
+		backgroundColor: "#ef4444",
+		"&:hover": { backgroundColor: "#dc2626" },
+	},
+
+	pendingBtnAccept: {
+		backgroundColor: "#22c55e",
+		"&:hover": { backgroundColor: "#16a34a" },
 	},
 
 	ticketQueueColor: {
@@ -337,6 +354,14 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 		history.push(`/tickets/${id}`);
 	};
 
+	const handlePassTicket = async id => {
+		try {
+			await api.put(`/tickets/${id}`, { status: "pending", userId: null });
+		} catch (err) {
+			toastError(err);
+		}
+	};
+
 	const handleSelectTicket = id => {
 		history.push(`/tickets/${id}`);
 	};
@@ -438,7 +463,7 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 									color="primary"
 								/>
 							)}
-							{ticket.aiActive && !ticket.isGroup && ticket.status !== "closed" && (
+							{ticket.aiActive && !ticket.isGroup && ticket.status !== "closed" && ticket.status !== "pending" && (
 								<Tooltip title={i18n.t("aiChat.aiHandling")}>
 									<div className={classes.aiTag}>
 										<Android style={{ fontSize: 11 }} />
@@ -446,78 +471,86 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 									</div>
 								</Tooltip>
 							)}
-							{ticket.lastMessage && (
-								<Typography
-									className={classes.lastMessageTime}
-									component="span"
-									variant="body2"
-									color="textSecondary"
-								>
-									{isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
-										<>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
-									) : (
-										<>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
-									)}
-								</Typography>
+							{ticket.status === "pending" ? (
+								<span className={classes.pendingActions}>
+									<Tooltip title="Ver conversación">
+										<IconButton
+											size="small"
+											className={clsx(classes.pendingRoundBtn, classes.pendingBtnPreview)}
+											onClick={handleOpenPreview}
+										>
+											<SearchIcon style={{ fontSize: 15 }} />
+										</IconButton>
+									</Tooltip>
+									<Tooltip title="Pasar">
+										<IconButton
+											size="small"
+											className={clsx(classes.pendingRoundBtn, classes.pendingBtnPass)}
+											onClick={e => { e.stopPropagation(); handlePassTicket(ticket.id); }}
+										>
+											<CloseIcon style={{ fontSize: 15 }} />
+										</IconButton>
+									</Tooltip>
+									<Tooltip title="Aceptar">
+										<IconButton
+											size="small"
+											className={clsx(classes.pendingRoundBtn, classes.pendingBtnAccept)}
+											onClick={e => { e.stopPropagation(); handleAcepptTicket(ticket.id); }}
+											disabled={loading}
+										>
+											{loading
+												? <CircularProgress size={13} style={{ color: "#fff" }} />
+												: <CheckCircleOutlineIcon style={{ fontSize: 15 }} />}
+										</IconButton>
+									</Tooltip>
+								</span>
+							) : (
+								ticket.lastMessage && (
+									<Typography
+										className={classes.lastMessageTime}
+										component="span"
+										variant="body2"
+										color="textSecondary"
+									>
+										{isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
+											<>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
+										) : (
+											<>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
+										)}
+									</Typography>
+								)
 							)}
 						</span>
 					}
 					secondary={
 						<span>
 							<span className={classes.contactNameWrapper}>
-								{ticket.status === "pending" ? (
-									<span className={classes.pendingButtons}>
-										<Tooltip title="Ver conversación">
-											<IconButton
-												size="small"
-												className={classes.previewBtn}
-												onClick={handleOpenPreview}
-											>
-												<SearchIcon fontSize="small" />
-											</IconButton>
-										</Tooltip>
-										<ButtonWithSpinner
-											color="primary"
-											variant="contained"
-											size="small"
-											loading={loading}
-											onClick={e => {
-												e.stopPropagation();
-												handleAcepptTicket(ticket.id);
-											}}
-										>
-											{i18n.t("ticketsList.buttons.accept")}
-										</ButtonWithSpinner>
+								<Typography
+								className={classes.contactLastMessage}
+								noWrap
+								component="span"
+								variant="body2"
+								color="textSecondary"
+							>
+								{isTyping ? (
+									<span className={classes.typingText}>
+										{i18n.t("typing.label")}
 									</span>
+								) : ticket.lastMessage ? (
+									<MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>
 								) : (
-									<>
-										<Typography
-											className={classes.contactLastMessage}
-											noWrap
-											component="span"
-											variant="body2"
-											color="textSecondary"
-										>
-											{isTyping ? (
-												<span className={classes.typingText}>
-													{i18n.t("typing.label")}
-												</span>
-											) : ticket.lastMessage ? (
-												<MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>
-											) : (
-												<br />
-											)}
-										</Typography>
-
-										<Badge
-											className={classes.newMessagesCount}
-											badgeContent={ticket.unreadMessages}
-											classes={{
-												badge: classes.badgeStyle,
-											}}
-										/>
-									</>
+									<br />
 								)}
+							</Typography>
+							{ticket.status !== "pending" && (
+								<Badge
+									className={classes.newMessagesCount}
+									badgeContent={ticket.unreadMessages}
+									classes={{
+										badge: classes.badgeStyle,
+									}}
+								/>
+							)}
 							</span>
 							{/* Label chips */}
 							{ticket.labels && ticket.labels.length > 0 && (
