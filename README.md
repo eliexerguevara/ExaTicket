@@ -23,6 +23,7 @@ El frontend es una aplicación de chat multiusuario construida con React y Mater
 - **Adaptación de lenguaje automática** — la IA detecta si el cliente es técnico o no y ajusta el registro de respuesta
 - **Nota interna automática al escalar** — al transferir a un humano la IA genera un resumen del caso visible solo para agentes
 - **Consulta directa al asistente IA** — los agentes pueden preguntarle a la IA sobre cualquier ticket desde el chat
+- **Verificación de cliente antes de soporte** — la IA comprueba si el número o nombre está registrado en Splynx antes de abrir una sesión de soporte técnico; si no está en el sistema solicita nombre o teléfono de contrato y cierra el ticket si no se puede verificar
 - **Integración Splynx ISP Billing** — la IA consulta estado de servicios, historial de tickets y cortes generales antes de responder
 - **Pestaña Grupos** — visualización dedicada para conversaciones de grupos de WhatsApp
 - Escalado automático al operador humano (por solicitud del usuario, decisión de la IA o límite de intentos)
@@ -854,6 +855,23 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v1.9.0 — 2026-05-28
+
+- **Verificación de cliente antes de soporte (Phase 2.5)**
+  - Cuando el cliente elige "Soporte técnico", la IA busca su número en Splynx antes de abrir la sesión
+  - Si el número **sí está** registrado → accede directo al soporte IA (sin fricción extra)
+  - Si el número **no está** en el sistema → entra en la fase de verificación: la IA pide nombre completo o número de teléfono del contrato
+  - Si la verificación **tiene éxito** → la IA confirma al cliente por nombre y continúa con el soporte
+  - Si la verificación **falla** → la IA comunica que no puede brindar soporte y cierra el ticket automáticamente
+  - Aplica tanto en WhatsApp (`handleWhatsappEvents.ts`) como en Telegram (`TelegramBotService.ts`)
+  - Nueva función `findCustomerByInput(input)` en `SplynxService.ts`: detecta si el input es teléfono (≥ 7 dígitos) o nombre y delega a `findCustomerByPhone` / `findCustomersByName` según corresponda
+  - Flujo de fases actualizado: Fase 1 → Fase 2 → **Fase 2.5** (verificación) → Fase 3 (soporte IA)
+  - `aiAttempts`: 0 = enrutamiento, 1 = selección dpto., 2 = pendiente verificación, **3+** = soporte verificado
+- **Fix: crash de pantalla en blanco al contestar chat de Telegram desde el panel**
+  - `CreateMessageService` ya emitía el evento socket `appMessage` con el registro completo de la DB (incluyendo `createdAt`)
+  - `MessageController` emitía un segundo evento con un objeto incompleto (sin `createdAt`), causando `RangeError: Invalid time value` en el formateador de fechas del frontend
+  - Eliminado el emit duplicado; ahora solo `CreateMessageService` emite
 
 ### v1.8.0 — 2026-05-27
 - **Integración Telegram Bot** — los clientes ahora pueden abrir y gestionar tickets directamente desde Telegram
