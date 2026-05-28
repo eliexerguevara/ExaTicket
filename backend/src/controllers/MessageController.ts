@@ -59,6 +59,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       const chatId = ticket.contact.number; // stored as Telegram user/chat ID string
       await sendTelegramMessage(ticket.telegramId, chatId, body);
 
+      // CreateMessageService saves to DB AND emits the socket event with full message
       const msgId = `tg-agent-${chatId}-${Date.now()}`;
       await CreateMessageService({
         messageData: {
@@ -69,14 +70,6 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           read: true,
           ack: 2
         }
-      });
-
-      const io = getIO();
-      io.to(ticket.status).to(ticketId).emit("appMessage", {
-        action: "create",
-        message: { id: msgId, ticketId: ticket.id, body, fromMe: true, read: true, ack: 2 },
-        ticket,
-        contact: ticket.contact
       });
     } catch (err) {
       logger.error(err, `MessageController: error sending Telegram message for ticket ${ticketId}`);

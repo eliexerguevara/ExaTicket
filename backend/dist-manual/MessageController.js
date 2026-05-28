@@ -50,6 +50,7 @@ const store = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         try {
             const chatId = ticket.contact.number;
             yield (0, TelegramBotService_1.sendTelegramMessage)(ticket.telegramId, chatId, body);
+            // CreateMessageService saves to DB AND emits the socket event with full message (incl. createdAt)
             const msgId = `tg-agent-${chatId}-${Date.now()}`;
             yield (0, CreateMessageService_1.default)({
                 messageData: {
@@ -60,13 +61,6 @@ const store = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                     read: true,
                     ack: 2
                 }
-            });
-            const io = (0, socket_1.getIO)();
-            io.to(ticket.status).to(ticketId).emit("appMessage", {
-                action: "create",
-                message: { id: msgId, ticketId: ticket.id, body, fromMe: true, read: true, ack: 2 },
-                ticket,
-                contact: ticket.contact
             });
         }
         catch (err) {
