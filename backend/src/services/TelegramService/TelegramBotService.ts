@@ -234,7 +234,7 @@ const findOrCreateTelegramTicket = async (
   });
 
   if (ticket) {
-    await ticket.update({ unreadMessages });
+    await ticket.update({ unreadMessages, isGroup: false });
   }
 
   if (!ticket) {
@@ -250,6 +250,7 @@ const findOrCreateTelegramTicket = async (
     if (ticket) {
       await ticket.update({
         status: "pending",
+        isGroup: false,
         userId: null,
         unreadMessages,
         aiActive: true,
