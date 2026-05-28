@@ -160,6 +160,19 @@ const getSplynxInfo = async (
   }
 };
 
+/** Search Splynx for a customer using free-form input (phone or name). */
+const verifySplynxCustomer = async (
+  input: string
+): Promise<{ customerId: number | null; name: string | null }> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { findCustomerByInput } = require("../SplynxService/SplynxService");
+    const customer = await findCustomerByInput(input);
+    if (customer) return { customerId: customer.id, name: customer.name };
+  } catch { /* ignore */ }
+  return { customerId: null, name: null };
+};
+
 const createSplynxResolutionTicket = async (
   customerId: number,
   ticketId: number
@@ -344,8 +357,35 @@ const handleAIForTelegram = async (
     }
 
     if (choice === "soporte") {
-      await ticket.update({ aiAttempts: 2 });
-      await sendWithTyping(bot, chatId, "Con gusto te ayudo. ¿Cuál es el problema?", ticket.id);
+      // ── Verify customer in Splynx before opening support ──────────────────
+      let splynxEnabled = false;
+      try { splynxEnabled = (await CheckSettings("splynxEnabled")) === "enabled"; } catch { /* ignore */ }
+
+      if (splynxEnabled) {
+        // contactNumber for Telegram = Telegram user ID (not a real phone),
+        // so direct phone lookup almost always returns null → ask to identify
+        const check = await getSplynxInfo(contactNumber, false);
+
+        if (check.customerId) {
+          // Found by phone — skip verification and go straight to support
+          await ticket.update({ aiAttempts: 3 });
+          await sendWithTyping(bot, chatId, "Con gusto te ayudo. ¿Cuál es el problema técnico?", ticket.id);
+        } else {
+          // Not found — enter verification phase
+          await ticket.update({ aiAttempts: 2 });
+          await sendWithTyping(
+            bot, chatId,
+            "Para brindarte soporte, primero necesito verificar que eres cliente. 🔍\n\n" +
+            "No encontré tu número en nuestro sistema. Por favor indícame tu *nombre completo* " +
+            "o el *número de teléfono* con el que tienes el servicio.",
+            ticket.id
+          );
+        }
+      } else {
+        // Splynx not enabled — skip verification, go to support directly
+        await ticket.update({ aiAttempts: 3 });
+        await sendWithTyping(bot, chatId, "Con gusto te ayudo. ¿Cuál es el problema técnico?", ticket.id);
+      }
       return;
     }
 
@@ -353,7 +393,33 @@ const handleAIForTelegram = async (
     return;
   }
 
-  // ── Phase 3: AI-driven support ────────────────────────────────────────────
+  // ── Phase 2.5: Customer identity verification ─────────────────────────────
+  // Reached only when Splynx is enabled and the customer was NOT found by phone.
+  // The user's message contains the name or phone number they provided.
+  if (ticket.aiAttempts === 2) {
+    const { customerId: foundId, name: foundName } = await verifySplynxCustomer(messageBody);
+
+    if (foundId) {
+      await ticket.update({ aiAttempts: 3 });
+      await sendWithTyping(
+        bot, chatId,
+        `¡Te encontré en el sistema${foundName ? `, *${foundName}*` : ""}! ✅ Con gusto te ayudamos. ¿Cuál es el problema técnico?`,
+        ticket.id
+      );
+    } else {
+      await sendWithTyping(
+        bot, chatId,
+        "Lo siento, no encontré esa información en nuestro sistema. 😕\n\n" +
+        "Si crees que hay un error o aún no eres cliente, comunícate con nosotros directamente. ¡Gracias!",
+        ticket.id
+      );
+      await ticket.update({ aiActive: false });
+      await UpdateTicketService({ ticketData: { status: "closed" }, ticketId: ticket.id });
+    }
+    return;
+  }
+
+  // ── Phase 3: AI-driven support (aiAttempts >= 3, customer verified) ────────
   let maxAttempts = 10;
   try {
     maxAttempts = parseInt(await CheckSettings("aiMaxAttempts"), 10) || 10;
@@ -371,7 +437,7 @@ Respuestas cortas y claras. Máximo 3-4 pasos a la vez. Sé amable y paciente.
 El cliente está escribiendo por Telegram.`;
   try { systemPrompt = await CheckSettings("aiSystemPrompt"); } catch { /* default */ }
 
-  const isFirstSupportMsg = ticket.aiAttempts === 2;
+  const isFirstSupportMsg = ticket.aiAttempts === 3; // 3 = first verified support msg
   const splynxInfo = await getSplynxInfo(contactNumber, isFirstSupportMsg);
 
   if (splynxInfo.hasOutage) {

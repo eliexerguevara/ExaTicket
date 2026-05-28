@@ -11,6 +11,7 @@ import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
+import { sendTelegramMessage } from "../services/TelegramService/TelegramBotService";
 import { getAgentAdvice } from "../services/AIServices/GetAIResponse";
 import { logger } from "../utils/logger";
 
@@ -48,6 +49,43 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   SetTicketMessagesAsRead(ticket);
 
+  // ── Telegram ticket ──────────────────────────────────────────────────────────
+  if (ticket.telegramId) {
+    if (medias) {
+      // Telegram media not supported via agent UI yet — send text notification
+      return res.status(400).json({ error: "El envío de archivos por Telegram no está soportado aún desde el panel." });
+    }
+    try {
+      const chatId = ticket.contact.number; // stored as Telegram user/chat ID string
+      await sendTelegramMessage(ticket.telegramId, chatId, body);
+
+      const msgId = `tg-agent-${chatId}-${Date.now()}`;
+      await CreateMessageService({
+        messageData: {
+          id: msgId,
+          ticketId: ticket.id,
+          body,
+          fromMe: true,
+          read: true,
+          ack: 2
+        }
+      });
+
+      const io = getIO();
+      io.to(ticket.status).to(ticketId).emit("appMessage", {
+        action: "create",
+        message: { id: msgId, ticketId: ticket.id, body, fromMe: true, read: true, ack: 2 },
+        ticket,
+        contact: ticket.contact
+      });
+    } catch (err) {
+      logger.error(err, `MessageController: error sending Telegram message for ticket ${ticketId}`);
+      return res.status(500).json({ error: "Error al enviar mensaje por Telegram" });
+    }
+    return res.send();
+  }
+
+  // ── WhatsApp ticket ──────────────────────────────────────────────────────────
   if (medias) {
     await Promise.all(
       medias.map(async (media: Express.Multer.File) => {

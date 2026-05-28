@@ -43,6 +43,19 @@ const getSplynxInfo = async (
   }
 };
 
+/** Search Splynx for a customer using free-form input (phone number or name). */
+const verifySplynxCustomer = async (
+  input: string
+): Promise<{ customerId: number | null; name: string | null }> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { findCustomerByInput } = require("../services/SplynxService/SplynxService");
+    const customer = await findCustomerByInput(input);
+    if (customer) return { customerId: customer.id, name: customer.name };
+  } catch { /* ignore */ }
+  return { customerId: null, name: null };
+};
+
 /**
  * Create a Splynx ticket recording the resolved WhatsApp conversation.
  * Called automatically when AI or keyword detection marks a case as resolved.
@@ -532,12 +545,34 @@ const handleAISupport = async (
 
     // Route to AI support
     if (choice === "soporte") {
-      await ticket.update({ aiAttempts: 2 });
-      await sendMsg(
-        whatsappId,
-        contactNumber,
-        "Con gusto te ayudo. ¿Cuál es el problema?"
-      );
+      // ── Verify customer in Splynx before opening support ──────────────────
+      let splynxEnabled = false;
+      try { splynxEnabled = (await CheckSettings("splynxEnabled")) === "enabled"; } catch { /* ignore */ }
+
+      if (splynxEnabled) {
+        // For WhatsApp the contactNumber IS the real phone — likely to find a match
+        const check = await getSplynxInfo(contactNumber, false);
+
+        if (check.customerId) {
+          // Found — skip verification phase, go straight to support
+          await ticket.update({ aiAttempts: 3 });
+          await sendMsg(whatsappId, contactNumber, "Con gusto te ayudo. ¿Cuál es el problema técnico?");
+        } else {
+          // Not found — enter verification phase
+          await ticket.update({ aiAttempts: 2 });
+          await sendMsg(
+            whatsappId,
+            contactNumber,
+            "Para brindarte soporte, primero necesito verificar que eres cliente. 🔍\n\n" +
+            "No encontré tu número en nuestro sistema. Por favor indícame tu *nombre completo* " +
+            "o el *número de teléfono* con el que tienes el servicio."
+          );
+        }
+      } else {
+        // Splynx not enabled — skip verification
+        await ticket.update({ aiAttempts: 3 });
+        await sendMsg(whatsappId, contactNumber, "Con gusto te ayudo. ¿Cuál es el problema técnico?");
+      }
       return;
     }
 
@@ -546,7 +581,32 @@ const handleAISupport = async (
     return;
   }
 
-  // ── PHASE 3: AI-driven support (aiAttempts >= 2) ───────────────────────────
+  // ── PHASE 2.5: Customer identity verification ─────────────────────────────
+  // Reached only when Splynx is enabled and the customer was NOT found by phone.
+  // The client's message contains the name or phone number they provided.
+  if (ticket.aiAttempts === 2) {
+    const { customerId: foundId, name: foundName } = await verifySplynxCustomer(messageBody);
+
+    if (foundId) {
+      await ticket.update({ aiAttempts: 3 });
+      await sendMsg(
+        whatsappId,
+        contactNumber,
+        `¡Te encontré en el sistema${foundName ? `, *${foundName}*` : ""}! ✅ Con gusto te ayudamos. ¿Cuál es el problema técnico?`
+      );
+    } else {
+      await sendMsg(
+        whatsappId,
+        contactNumber,
+        "Lo siento, no encontré esa información en nuestro sistema. 😕\n\n" +
+        "Si crees que hay un error o aún no eres cliente, comunícate con nosotros directamente. ¡Gracias!"
+      );
+      await UpdateTicketService({ ticketData: { aiActive: false, status: "closed" }, ticketId: ticket.id });
+    }
+    return;
+  }
+
+  // ── PHASE 3: AI-driven support (aiAttempts >= 3, customer verified) ────────
   let maxAttempts = 10;
   try {
     maxAttempts = parseInt(await CheckSettings("aiMaxAttempts"), 10) || 10;
@@ -577,9 +637,8 @@ Reglas adicionales:
   }
 
   // Fetch Splynx customer context and metadata (non-blocking).
-  // isFirstMessage=true on the first support interaction (aiAttempts===2) so the AI
-  // greets the client with "Encontré tu servicio" and includes the diagnosis block.
-  const isFirstSupportMsg = ticket.aiAttempts === 2;
+  // isFirstMessage=true on the first verified support interaction (aiAttempts===3).
+  const isFirstSupportMsg = ticket.aiAttempts === 3; // was 2 before verification phase
   const splynxInfo = await getSplynxInfo(contactNumber, isFirstSupportMsg);
 
   // Auto-apply "Falla General" label ONLY when Splynx explicitly confirmed an active outage.

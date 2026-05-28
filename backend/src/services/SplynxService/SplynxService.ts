@@ -238,6 +238,25 @@ export const findCustomersByName = async (
   }
 };
 
+/**
+ * Find a customer by any free-form input — phone number or full/partial name.
+ * If input contains ≥7 digits → treated as phone and searched via findCustomerByPhone.
+ * Otherwise → searched by name via findCustomersByName.
+ * Returns the first match, or null if none found.
+ */
+export const findCustomerByInput = async (
+  input: string
+): Promise<SplynxCustomer | null> => {
+  const digits = input.replace(/\D/g, "");
+  if (digits.length >= 7) {
+    return findCustomerByPhone(digits);
+  }
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const results = await findCustomersByName(trimmed);
+  return results.length > 0 ? results[0] : null;
+};
+
 /** Get all internet services for a customer */
 export const getCustomerServices = async (
   customerId: number
