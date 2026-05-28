@@ -6,7 +6,6 @@ import {
   AppBar,
   Toolbar,
   List,
-  Typography,
   Divider,
   MenuItem,
   IconButton,
@@ -17,7 +16,7 @@ import MenuIcon from "@material-ui/icons/Menu";
 import ChevronLeftIcon from "@material-ui/icons/ChevronLeft";
 import AccountCircle from "@material-ui/icons/AccountCircle";
 import Brightness4Icon from "@material-ui/icons/Brightness4";
-import logo from "../assets/logo.svg";
+import logo from "../assets/logo.png";
 
 import MainListItems from "./MainListItems";
 import NotificationsPopOver from "../components/NotificationsPopOver";
@@ -77,8 +76,9 @@ const useStyles = makeStyles((theme) => ({
     gap: 8,
   },
   logo: {
-    height: 30,
+    height: 38,
     width: "auto",
+    objectFit: "contain",
   },
   title: {
     color: theme.palette.type === "dark" ? "#ffffff" : theme.palette.text.primary,
@@ -239,15 +239,7 @@ const LoggedInLayout = ({ children }) => {
             <MenuIcon />
           </IconButton>
           <div className={classes.titleWrapper}>
-            <img src={logo} alt="ExaTicket logo" className={classes.logo} />
-            <Typography
-              component="h1"
-              variant="h6"
-              noWrap
-              className={classes.title}
-            >
-              EXATICKET
-            </Typography>
+            <img src={logo} alt="Exacom logo" className={classes.logo} />
           </div>
 
           <div className={classes.themeSwitchContainer}>
