@@ -9,6 +9,7 @@ import UpdateTicketService from "../services/TicketServices/UpdateTicketService"
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import formatBody from "../helpers/Mustache";
+import { logger } from "../utils/logger";
 
 type IndexQuery = {
   searchParam: string;
@@ -97,16 +98,19 @@ export const update = async (
     ticketId
   });
 
-  if (ticket.status === "closed") {
-    const whatsapp = await ShowWhatsAppService(ticket.whatsappId);
-
-    const { farewellMessage } = whatsapp;
-
-    if (farewellMessage) {
-      await SendWhatsAppMessage({
-        body: formatBody(farewellMessage, ticket.contact),
-        ticket
-      });
+  // Only send WhatsApp farewell for WhatsApp tickets (Telegram tickets have no whatsappId)
+  if (ticket.status === "closed" && ticket.whatsappId) {
+    try {
+      const whatsapp = await ShowWhatsAppService(ticket.whatsappId);
+      const { farewellMessage } = whatsapp;
+      if (farewellMessage) {
+        await SendWhatsAppMessage({
+          body: formatBody(farewellMessage, ticket.contact),
+          ticket
+        });
+      }
+    } catch (err) {
+      logger.warn({ ticketId, err }, "TicketController: could not send farewell message, ignoring");
     }
   }
 

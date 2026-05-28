@@ -1,5 +1,11 @@
 import { Request, Response } from "express";
-import { testConnection as splynxTestConnection } from "../services/SplynxService/SplynxService";
+import {
+  testConnection as splynxTestConnection,
+  findCustomersByName,
+  createSplynxTicket
+} from "../services/SplynxService/SplynxService";
+import { getTicketSummary } from "../services/AIServices/GetAIResponse";
+import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import { logger } from "../utils/logger";
 
 export const testConnection = async (
@@ -37,5 +43,70 @@ export const testConnection = async (
   } catch (err) {
     logger.error(err, "SplynxController: testConnection error");
     return res.status(500).json({ ok: false, message: "Error interno" });
+  }
+};
+
+/** Search Splynx customers by partial name */
+export const searchCustomers = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { name } = req.query as { name?: string };
+  if (!name || String(name).trim().length < 2) {
+    return res.json([]);
+  }
+  try {
+    const results = await findCustomersByName(String(name).trim());
+    return res.json(results || []);
+  } catch (err) {
+    logger.error(err, "SplynxController: searchCustomers error");
+    return res.status(500).json({ error: "Error buscando clientes" });
+  }
+};
+
+/** Generate AI summary for a ticket and create a Splynx ticket, then close the ExaTicket */
+export const documentTicket = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const ticketId = Number(req.params.ticketId);
+  const { splynxCustomerId } = req.body as { splynxCustomerId?: number };
+
+  if (!ticketId || !splynxCustomerId) {
+    return res.status(400).json({ error: "ticketId y splynxCustomerId son requeridos" });
+  }
+
+  try {
+    // 1. AI summary (scoped to this ticket's messages only)
+    const summary = await getTicketSummary(ticketId);
+    const dateStr = new Date().toLocaleDateString("es", {
+      day: "2-digit", month: "2-digit", year: "numeric"
+    });
+    const subject = `Soporte ${dateStr}`;
+    const message = summary
+      ? `Caso resuelto vía ExaTicket.\n\nResumen:\n${summary}`
+      : "Caso resuelto vía ExaTicket.";
+
+    // 2. Create Splynx ticket via bridge
+    const splynxResult = await createSplynxTicket(
+      splynxCustomerId, subject, message, "low", "closed"
+    );
+
+    if (!splynxResult?.id) {
+      logger.warn({ ticketId, splynxCustomerId }, "SplynxController: documentTicket - bridge returned no id");
+      return res.status(500).json({ error: "No se pudo crear el ticket en Splynx" });
+    }
+
+    // 3. Close the ExaTicket
+    await UpdateTicketService({ ticketData: { status: "closed" }, ticketId });
+
+    logger.info(
+      { ticketId, splynxTicketId: splynxResult.id, splynxCustomerId },
+      "SplynxController: ticket documented and closed"
+    );
+    return res.json({ success: true, splynxTicketId: splynxResult.id });
+  } catch (err) {
+    logger.error(err, "SplynxController: documentTicket error");
+    return res.status(500).json({ error: "Error al documentar el ticket" });
   }
 };

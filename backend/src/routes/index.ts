@@ -13,6 +13,7 @@ import quickAnswerRoutes from "./quickAnswerRoutes";
 import apiRoutes from "./apiRoutes";
 import labelRoutes from "./labelRoutes";
 import telegramRoutes from "./telegramRoutes";
+import splynxRoutes from "./splynxRoutes";
 
 const routes = Router();
 
@@ -29,5 +30,6 @@ routes.use(quickAnswerRoutes);
 routes.use("/api/messages", apiRoutes);
 routes.use(labelRoutes);
 routes.use(telegramRoutes);
+routes.use(splynxRoutes);
 
 export default routes;

@@ -11,6 +11,7 @@ import TicketOptionsMenu from "../TicketOptionsMenu";
 import ButtonWithSpinner from "../ButtonWithSpinner";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import SplynxDocumentModal from "../SplynxDocumentModal";
 
 const useStyles = makeStyles(theme => ({
 	actionButtons: {
@@ -36,6 +37,7 @@ const TicketActionButtons = ({ ticket }) => {
 	const history = useHistory();
 	const [anchorEl, setAnchorEl] = useState(null);
 	const [loading, setLoading] = useState(false);
+	const [documentModalOpen, setDocumentModalOpen] = useState(false);
 	const ticketOptionsMenuOpen = Boolean(anchorEl);
 	const { user } = useContext(AuthContext);
 
@@ -83,6 +85,23 @@ const TicketActionButtons = ({ ticket }) => {
 		}
 	};
 
+	// Opens the Documentar / No Documentar modal
+	const handleResolveClick = () => {
+		setDocumentModalOpen(true);
+	};
+
+	// "No Documentar" path — close ticket normally
+	const handleResolveDirect = async () => {
+		setDocumentModalOpen(false);
+		await handleUpdateTicketStatus(null, "closed", user?.id);
+	};
+
+	// Called after modal finishes (success or dismiss)
+	const handleDocumentModalClose = () => {
+		setDocumentModalOpen(false);
+		history.push("/tickets");
+	};
+
 	return (
 		<div className={classes.actionButtons}>
 			{ticket.aiActive && ticket.status !== "closed" && (
@@ -124,7 +143,7 @@ const TicketActionButtons = ({ ticket }) => {
 						size="small"
 						variant="contained"
 						color="primary"
-						onClick={e => handleUpdateTicketStatus(e, "closed", user?.id)}
+						onClick={handleResolveClick}
 					>
 						{i18n.t("messagesList.header.buttons.resolve")}
 					</ButtonWithSpinner>
@@ -150,6 +169,13 @@ const TicketActionButtons = ({ ticket }) => {
 					{i18n.t("messagesList.header.buttons.accept")}
 				</ButtonWithSpinner>
 			)}
+
+			<SplynxDocumentModal
+				open={documentModalOpen}
+				ticket={ticket}
+				onClose={handleDocumentModalClose}
+				onResolveDirect={handleResolveDirect}
+			/>
 		</div>
 	);
 };
