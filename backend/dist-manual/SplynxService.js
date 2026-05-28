@@ -332,30 +332,21 @@ const createSplynxTicket = (customerId, subject, message, priority = "medium", s
         const client = yield buildClient();
         if (!client)
             return null;
-        // Splynx does not allow creating tickets with terminal statuses ("solved"/"closed").
-        // Map them to "new" so the ticket is at least recorded, then close it right after.
-        const createStatus = (status === "solved" || status === "closed") ? "new" : status;
-        const payload = {
-            customer_id: customerId,
-            subject,
-            message,
-            priority,
-            status: createStatus
-        };
-        logger_1.logger.info({ payload }, "Splynx: creating ticket");
-        const { data } = yield client.post("/admin/support/tickets", payload);
+        // Splynx's TicketsController.php uses Model::load() which expects form-encoded POST data,
+        // NOT a JSON body. Sending JSON causes a 500 "string given" PHP error.
+        // Use URLSearchParams to send application/x-www-form-urlencoded.
+        const formData = new URLSearchParams();
+        formData.append("customer_id", String(customerId));
+        formData.append("subject", subject);
+        formData.append("message", message);
+        formData.append("priority", priority);
+        formData.append("status", status);
+        logger_1.logger.info({ customer_id: customerId, subject, priority, status }, "Splynx: creating ticket (form-encoded)");
+        const { data } = yield client.post("/admin/support/tickets", formData, {
+            headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        });
         const ticket = unwrap(data);
-        logger_1.logger.info(`Splynx: ticket created id=${ticket === null || ticket === void 0 ? void 0 : ticket.id} status=${createStatus} for customer ${customerId}`);
-        // If the caller wanted the ticket closed/solved, update the status now
-        if (ticket && ticket.id && (status === "solved" || status === "closed")) {
-            try {
-                yield client.put(`/admin/support/tickets/${ticket.id}`, { status });
-                logger_1.logger.info(`Splynx: ticket ${ticket.id} status updated to ${status}`);
-            } catch (updateErr) {
-                var _r = updateErr === null || updateErr === void 0 ? void 0 : updateErr.response;
-                logger_1.logger.warn({ status: _r === null || _r === void 0 ? void 0 : _r.status, data: _r === null || _r === void 0 ? void 0 : _r.data }, `Splynx: ticket created but status update to ${status} failed`);
-            }
-        }
+        logger_1.logger.info(`Splynx: ticket created id=${ticket === null || ticket === void 0 ? void 0 : ticket.id} status=${status} for customer ${customerId}`);
         return ticket || null;
     }
     catch (err) {
