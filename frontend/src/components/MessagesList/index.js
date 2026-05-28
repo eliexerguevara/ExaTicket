@@ -43,7 +43,8 @@ const useStyles = makeStyles((theme) => ({
   },
 
   messagesList: {
-    backgroundImage: `url(${whatsBackground})`,
+    backgroundImage: theme.palette.type === "dark" ? "none" : `url(${whatsBackground})`,
+    backgroundColor: theme.palette.type === "dark" ? "#0b141a" : "transparent",
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
@@ -80,8 +81,8 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#ffffff",
-    color: "#303030",
+    backgroundColor: theme.palette.type === "dark" ? "#202c33" : "#ffffff",
+    color: theme.palette.type === "dark" ? "#e9edef" : "#303030",
     alignSelf: "flex-start",
     borderTopLeftRadius: 0,
     borderTopRightRadius: 8,
@@ -91,13 +92,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: theme.palette.type === "dark" ? "0 1px 1px #00000055" : "0 1px 1px #b3b3b3",
   },
 
   quotedContainerLeft: {
     margin: "-3px -80px 6px -6px",
     overflow: "hidden",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: theme.palette.type === "dark" ? "#182229" : "#f0f0f0",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -134,8 +135,8 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#dcf8c6",
-    color: "#303030",
+    backgroundColor: theme.palette.type === "dark" ? "#005c4b" : "#dcf8c6",
+    color: theme.palette.type === "dark" ? "#e9edef" : "#303030",
     alignSelf: "flex-end",
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -145,13 +146,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: theme.palette.type === "dark" ? "0 1px 1px #00000055" : "0 1px 1px #b3b3b3",
   },
 
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
-    backgroundColor: "#cfe9ba",
+    backgroundColor: theme.palette.type === "dark" ? "#0d4034" : "#cfe9ba",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -193,7 +194,7 @@ const useStyles = makeStyles((theme) => ({
 
   textContentItemDeleted: {
     fontStyle: "italic",
-    color: "rgba(0, 0, 0, 0.36)",
+    color: theme.palette.type === "dark" ? "rgba(255,255,255,0.38)" : "rgba(0, 0, 0, 0.36)",
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
   },
@@ -213,7 +214,7 @@ const useStyles = makeStyles((theme) => ({
     position: "absolute",
     bottom: 0,
     right: 5,
-    color: "#999",
+    color: theme.palette.type === "dark" ? "#8696a0" : "#999",
   },
 
   dailyTimestamp: {
@@ -221,14 +222,14 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "center",
     alignSelf: "center",
     width: "110px",
-    backgroundColor: "#e1f3fb",
+    backgroundColor: theme.palette.type === "dark" ? "#182229" : "#e1f3fb",
     margin: "10px",
     borderRadius: "10px",
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: theme.palette.type === "dark" ? "0 1px 1px #00000055" : "0 1px 1px #b3b3b3",
   },
 
   dailyTimestampText: {
-    color: "#808888",
+    color: theme.palette.type === "dark" ? "#8696a0" : "#808888",
     padding: 8,
     alignSelf: "center",
     marginLeft: "0px",
@@ -268,8 +269,8 @@ const useStyles = makeStyles((theme) => ({
     width: "88%",
     marginTop: 10,
     marginBottom: 10,
-    backgroundColor: "#fffbeb",
-    border: "1px dashed #f59e0b",
+    backgroundColor: theme.palette.type === "dark" ? "#1f1b0e" : "#fffbeb",
+    border: theme.palette.type === "dark" ? "1px dashed #92400e" : "1px dashed #f59e0b",
     borderRadius: 8,
     padding: "8px 14px 10px",
     position: "relative",
@@ -281,7 +282,7 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     alignItems: "center",
     gap: 4,
-    color: "#b45309",
+    color: theme.palette.type === "dark" ? "#fbbf24" : "#b45309",
     fontSize: "0.7em",
     fontWeight: 700,
     textTransform: "uppercase",
@@ -291,13 +292,13 @@ const useStyles = makeStyles((theme) => ({
 
   internalBody: {
     fontSize: "0.85em",
-    color: "#374151",
+    color: theme.palette.type === "dark" ? "#d1d5db" : "#374151",
     lineHeight: 1.5,
   },
 
   internalTime: {
     fontSize: "0.68em",
-    color: "#9ca3af",
+    color: theme.palette.type === "dark" ? "#6b7280" : "#9ca3af",
     marginTop: 4,
     textAlign: "right",
   },
