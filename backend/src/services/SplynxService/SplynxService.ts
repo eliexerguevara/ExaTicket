@@ -253,8 +253,31 @@ export const findCustomerByInput = async (
   }
   const trimmed = input.trim();
   if (!trimmed) return null;
+
   const results = await findCustomersByName(trimmed);
-  return results.length > 0 ? results[0] : null;
+  if (results.length === 0) return null;
+
+  // Guard: verify the returned customer name actually matches the query.
+  // Splynx may return unfiltered results when the search param isn't recognised,
+  // which would let any random text pass verification.
+  const query = trimmed.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const words  = query.split(/\s+/).filter(w => w.length >= 3);
+
+  const match = results.find(c => {
+    const cname = (c.name || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+    // Accept if: stored name contains the query, query contains the stored name,
+    // or at least one meaningful word from the query appears in the stored name.
+    return (
+      cname.includes(query) ||
+      query.includes(cname) ||
+      words.some(w => cname.includes(w))
+    );
+  });
+
+  return match ?? null;
 };
 
 /** Get all internet services for a customer */

@@ -192,7 +192,20 @@ const findCustomerByInput = (input) => __awaiter(void 0, void 0, void 0, functio
     if (!trimmed)
         return null;
     const results = yield findCustomersByName(trimmed);
-    return results.length > 0 ? results[0] : null;
+    if (results.length === 0)
+        return null;
+    // Guard: verify the returned customer name actually matches the query.
+    // Splynx may return unfiltered results when the search param isn't recognised,
+    // which would let any random text pass verification.
+    const query = trimmed.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const words = query.split(/\s+/).filter(w => w.length >= 3);
+    const match = results.find(c => {
+        const cname = (c.name || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        return (cname.includes(query) ||
+            query.includes(cname) ||
+            words.some(w => cname.includes(w)));
+    });
+    return match !== null && match !== void 0 ? match : null;
 });
 exports.findCustomerByInput = findCustomerByInput;
 /** Get all internet services for a customer */
