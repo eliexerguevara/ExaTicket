@@ -11,6 +11,7 @@ import {
   IconButton,
   Menu,
   Switch,
+  Typography,
 } from "@material-ui/core";
 import MenuIcon from "@material-ui/icons/Menu";
 import ChevronLeftIcon from "@material-ui/icons/ChevronLeft";
@@ -240,6 +241,14 @@ const LoggedInLayout = ({ children }) => {
           </IconButton>
           <div className={classes.titleWrapper}>
             <img src={logo} alt="Exacom logo" className={classes.logo} />
+            <Typography
+              component="h1"
+              variant="h6"
+              noWrap
+              className={classes.title}
+            >
+              ExaTicket
+            </Typography>
           </div>
 
           <div className={classes.themeSwitchContainer}>
