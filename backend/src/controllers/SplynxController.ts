@@ -77,15 +77,24 @@ export const documentTicket = async (
   }
 
   try {
-    // 1. AI summary (scoped to this ticket's messages only)
-    const summary = await getTicketSummary(ticketId);
-    const dateStr = new Date().toLocaleDateString("es", {
+    // 1. AI summary (last 12 hours only)
+    const summaryResult = await getTicketSummary(ticketId);
+    const summary = summaryResult?.summary ?? null;
+    const reportTime = summaryResult?.reportTime ?? null;
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("es", {
       day: "2-digit", month: "2-digit", year: "numeric"
     });
-    const subject = `Soporte ${dateStr}`;
+    const timeStr = now.toLocaleTimeString("es", {
+      hour: "2-digit", minute: "2-digit", hour12: false
+    });
+    const subject = `Soporte ${dateStr} ${timeStr}`;
+
+    const reportLine = reportTime ? `\nHora de reporte: ${reportTime}` : "";
     const message = summary
-      ? `Caso resuelto vía ExaTicket.\n\nResumen:\n${summary}`
-      : "Caso resuelto vía ExaTicket.";
+      ? `Caso resuelto vía ExaTicket.${reportLine}\n\nResumen:\n${summary}`
+      : `Caso resuelto vía ExaTicket.${reportLine}`;
 
     // 2. Create Splynx ticket via bridge
     const splynxResult = await createSplynxTicket(

@@ -58,13 +58,18 @@ const documentTicket = (req, res) => __awaiter(void 0, void 0, void 0, function*
         return res.status(400).json({ error: "ticketId y splynxCustomerId son requeridos" });
     }
     try {
-        // 1. AI summary (scoped to this ticket's messages only)
-        const summary = yield GetAIResponse.getTicketSummary(ticketId);
-        const dateStr = new Date().toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric" });
-        const subject = `Soporte ${dateStr}`;
+        // 1. AI summary (last 12 hours only)
+        const summaryResult = yield GetAIResponse.getTicketSummary(ticketId);
+        const summary = (summaryResult === null || summaryResult === void 0 ? void 0 : summaryResult.summary) || null;
+        const reportTime = (summaryResult === null || summaryResult === void 0 ? void 0 : summaryResult.reportTime) || null;
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric" });
+        const timeStr = now.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: false });
+        const subject = `Soporte ${dateStr} ${timeStr}`;
+        const reportLine = reportTime ? `\nHora de reporte: ${reportTime}` : "";
         const message = summary
-            ? `Caso resuelto vía ExaTicket.\n\nResumen:\n${summary}`
-            : "Caso resuelto vía ExaTicket.";
+            ? `Caso resuelto vía ExaTicket.${reportLine}\n\nResumen:\n${summary}`
+            : `Caso resuelto vía ExaTicket.${reportLine}`;
         // 2. Create Splynx ticket via bridge
         const splynxResult = yield SplynxService.createSplynxTicket(splynxCustomerId, subject, message, "low", "closed");
         if (!(splynxResult === null || splynxResult === void 0 ? void 0 : splynxResult.id)) {

@@ -186,41 +186,77 @@ Responde con pasos técnicos numerados y concretos para el agente. En español.`
 
 // ─── Ticket summary: brief AI-generated summary for internal note ─────────────
 
+export interface TicketSummaryResult {
+  summary: string | null;
+  reportTime: string | null;
+}
+
 export const getTicketSummary = async (
   ticketId: number
-): Promise<string | null> => {
+): Promise<TicketSummaryResult | null> => {
   if (!process.env.ANTHROPIC_API_KEY) return null;
 
   try {
+    const { Op } = require("sequelize");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+    // Only messages from the last 12 hours
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+
     const messages = await Message.findAll({
-      where: { ticketId },
+      where: {
+        ticketId,
+        createdAt: { [Op.gte]: twelveHoursAgo }
+      },
       order: [["createdAt", "ASC"]],
-      limit: 20
+      limit: 30
     });
 
-    const conversation = buildConversation(messages);
-    if (conversation.length < 2) return null;
+    // Filter out media/deleted/internal
+    const filtered = messages.filter(
+      (m: any) => m.body && !m.body.startsWith("data:") && !m.isDeleted && !m.isInternal
+    );
+    if (filtered.length < 2) return null;
 
-    const conversationText = conversation
-      .map(m => `[${m.role === "user" ? "Cliente" : "Bot"}]: ${m.content}`)
+    // First client message = report time
+    const firstClientMsg = filtered.find((m: any) => !m.fromMe);
+    const reportTime = firstClientMsg
+      ? new Date(firstClientMsg.createdAt).toLocaleTimeString("es", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        })
+      : null;
+
+    // Build conversation with timestamps
+    const conversationText = filtered
+      .map((m: any) => {
+        const time = new Date(m.createdAt).toLocaleTimeString("es", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        });
+        const role = m.fromMe ? "Agente/Bot" : "Cliente";
+        return `[${time} - ${role}]: ${m.body}`;
+      })
       .join("\n");
 
     const result = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
+      max_tokens: 250,
       system:
-        "Resume en 2-3 líneas qué problema reportó el cliente y qué pasos tomó el bot. Sin encabezados. Directo y conciso. En español.",
+        "Eres un asistente de soporte técnico. Resume en 2-3 líneas el problema que reportó el cliente, la hora en que lo reportó y cómo se resolvió. Sin encabezados ni listas. Directo y conciso. En español.",
       messages: [
         {
           role: "user",
-          content: `Conversación:\n${conversationText}\n\nResume el caso:`
+          content: `Conversación de las últimas 12 horas:\n${conversationText}\n\nResume el caso incluyendo la hora del reporte:`
         }
       ]
     });
 
-    return result.content[0].type === "text" ? result.content[0].text : null;
+    const summary =
+      result.content[0].type === "text" ? result.content[0].text : null;
+    return { summary, reportTime };
   } catch (err) {
     logger.error(err, "Error generating ticket summary");
     return null;
