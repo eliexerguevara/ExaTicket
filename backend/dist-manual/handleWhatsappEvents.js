@@ -444,7 +444,8 @@ const handleAISupport = (ticket, messageBody, whatsappId, contactNumber) => __aw
     if (ticket.aiAttempts === 2) {
         const { customerId: foundId, name: foundName } = yield verifySplynxCustomer(messageBody);
         if (foundId) {
-            yield ticket.update({ aiAttempts: 3 });
+            // Persist the verified Splynx customer ID so Phase 3 can create the resolution ticket
+            yield ticket.update({ aiAttempts: 3, splynxCustomerId: foundId });
             yield sendMsg(whatsappId, contactNumber, `¡Te encontré en el sistema${foundName ? `, *${foundName}*` : ""}! ✅ Con gusto te ayudamos. ¿Cuál es el problema técnico?`);
         }
         else {
@@ -486,6 +487,11 @@ Reglas adicionales:
     // isFirstMessage=true on the first verified support interaction (aiAttempts===3).
     const isFirstSupportMsg = ticket.aiAttempts === 3;
     const splynxInfo = yield getSplynxInfo(contactNumber, isFirstSupportMsg);
+    // If phone lookup didn't find the customer but we verified by name in Phase 2.5,
+    // use the persisted splynxCustomerId so the resolution ticket is still created.
+    if (!splynxInfo.customerId && ticket.splynxCustomerId) {
+        splynxInfo.customerId = ticket.splynxCustomerId;
+    }
     // Auto-apply "Falla General" label ONLY when Splynx explicitly confirmed an active outage.
     // Using the structured flag instead of a regex avoids false positives from ticket history.
     if (splynxInfo.hasOutage) {

@@ -50,6 +50,12 @@ class Ticket extends Model<Ticket> {
   @Column
   aiAttempts: number;
 
+  /** Splynx customer ID resolved during Phase 2.5 name/phone verification.
+   *  Persisted so Phase 3 can create the resolution ticket even when the
+   *  WhatsApp phone number doesn't match the Splynx phone. */
+  @Column({ allowNull: true })
+  splynxCustomerId: number;
+
   @CreatedAt
   createdAt: Date;
 

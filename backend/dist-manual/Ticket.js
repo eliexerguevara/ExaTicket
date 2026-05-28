@@ -57,6 +57,10 @@ __decorate([
     __metadata("design:type", Number)
 ], Ticket.prototype, "aiAttempts", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({ allowNull: true }),
+    __metadata("design:type", Number)
+], Ticket.prototype, "splynxCustomerId", void 0);
+__decorate([
     sequelize_typescript_1.CreatedAt,
     __metadata("design:type", Date)
 ], Ticket.prototype, "createdAt", void 0);

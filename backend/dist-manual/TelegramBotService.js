@@ -348,7 +348,8 @@ const handleAIForTelegram = async (bot, ticket, messageBody, chatId, contactNumb
     if (ticket.aiAttempts === 2) {
         const { customerId: foundId, name: foundName } = await verifySplynxCustomer(messageBody);
         if (foundId) {
-            await ticket.update({ aiAttempts: 3 });
+            // Persist the verified Splynx customer ID so Phase 3 can create the resolution ticket
+            await ticket.update({ aiAttempts: 3, splynxCustomerId: foundId });
             await sendWithTyping(bot, chatId,
                 `¡Te encontré en el sistema${foundName ? `, *${foundName}*` : ""}! ✅ Con gusto te ayudamos. ¿Cuál es el problema técnico?`,
                 ticket.id);
@@ -384,6 +385,11 @@ const handleAIForTelegram = async (bot, ticket, messageBody, chatId, contactNumb
 
     const isFirstSupportMsg = ticket.aiAttempts === 3; // 3 = first verified support msg
     const splynxInfo = await getSplynxInfo(contactNumber, isFirstSupportMsg);
+    // If phone lookup didn't find the customer but we verified by name in Phase 2.5,
+    // use the persisted splynxCustomerId so the resolution ticket is still created.
+    if (!splynxInfo.customerId && ticket.splynxCustomerId) {
+        splynxInfo.customerId = ticket.splynxCustomerId;
+    }
 
     if (splynxInfo.hasOutage) {
         await autoApplyLabel(ticket.id, "Falla General", "#ef4444");
