@@ -96,6 +96,25 @@ const clientConfirmsResolution = (body: string): boolean => {
 const findQueueByName = async (keyword: string): Promise<Queue | null> =>
   Queue.findOne({ where: { name: { [Op.like]: `%${keyword}%` } } });
 
+/** Apply a label by name to a ticket (creates label if missing, skips if already applied) */
+const autoApplyLabel = async (
+  ticketId: number,
+  labelName: string,
+  color = "#ef4444"
+): Promise<void> => {
+  try {
+    const [label] = await Label.findOrCreate({
+      where: { name: labelName },
+      defaults: { name: labelName, color }
+    });
+    await TicketLabel.findOrCreate({
+      where: { ticketId, labelId: label.id }
+    });
+  } catch (err) {
+    logger.error(err, `autoApplyLabel error: ticketId=${ticketId} label=${labelName}`);
+  }
+};
+
 // ─── Typing simulation for Telegram ──────────────────────────────────────────
 
 const sendWithTyping = async (
@@ -299,6 +318,9 @@ const escalateToHuman = async (
   const updateData: { aiActive: boolean; queueId?: number } = { aiActive: false };
   if (supportQueue) updateData.queueId = supportQueue.id; // Always assign Soporte queue on escalation
   await ticket.update(updateData);
+
+  // Apply "Soporte Tecnico" label so escalated tickets are easily identified
+  await autoApplyLabel(ticket.id, "Soporte Tecnico", "#ef4444");
 
   const io = getIO();
   io.to("notification").to(ticket.status).emit("ticket", { action: "update", ticket });

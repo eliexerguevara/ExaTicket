@@ -429,6 +429,9 @@ const escalateToHuman = async (
   }
   await ticket.update(updateData);
 
+  // Apply "Soporte Tecnico" label so escalated tickets are easily identified
+  await autoApplyLabel(ticket.id, "Soporte Tecnico", "#ef4444");
+
   const io = getIO();
   io.to("notification").to(ticket.status).emit("ticket", {
     action: "update",
