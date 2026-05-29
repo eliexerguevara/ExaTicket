@@ -421,10 +421,10 @@ const escalateToHuman = async (
     // use default
   }
 
-  // Assign to Soporte queue so agents can see it
+  // Assign to Soporte queue so agents can see it — always override queue on escalation
   const supportQueue = await findQueueByName("oporte");
   const updateData: { aiActive: boolean; queueId?: number } = { aiActive: false };
-  if (supportQueue && !ticket.queueId) {
+  if (supportQueue) {
     updateData.queueId = supportQueue.id;
   }
   await ticket.update(updateData);
@@ -447,14 +447,14 @@ const escalateToHuman = async (
 
   // Generate and save internal AI summary note for the agent
   try {
-    const summary = await getTicketSummary(ticket.id);
-    if (summary) {
+    const summaryResult = await getTicketSummary(ticket.id);
+    if (summaryResult?.summary) {
       const noteId = `internal-${ticket.id}-${Date.now()}`;
       await CreateMessageService({
         messageData: {
           id: noteId,
           ticketId: ticket.id,
-          body: `*Resumen IA del caso:*\n${summary}`,
+          body: `*Resumen IA del caso:*\n${summaryResult.summary}`,
           fromMe: true,
           read: true,
           isInternal: true,

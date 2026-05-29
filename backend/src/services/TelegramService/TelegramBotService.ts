@@ -180,14 +180,18 @@ const createSplynxResolutionTicket = async (
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createSplynxTicket } = require("../SplynxService/SplynxService");
-    const summary = await getTicketSummary(ticketId);
+    const summaryResult = await getTicketSummary(ticketId);
+    const summaryText = summaryResult?.summary ?? null;
+    const reportLine = summaryResult?.reportTime ? `\nHora de reporte: ${summaryResult.reportTime}` : "";
     const dateStr = new Date().toLocaleDateString("es", {
       day: "2-digit", month: "2-digit", year: "numeric"
     });
     const result = await createSplynxTicket(
       customerId,
       `Soporte Telegram ${dateStr}`,
-      summary ? `Caso resuelto vía Telegram.\n\nResumen:\n${summary}` : "Caso resuelto vía Telegram.",
+      summaryText
+        ? `Caso resuelto vía Telegram.${reportLine}\n\nResumen:\n${summaryText}`
+        : `Caso resuelto vía Telegram.${reportLine}`,
       "low",
       "closed"
     );
@@ -293,7 +297,7 @@ const escalateToHuman = async (
 
   const supportQueue = await findQueueByName("oporte");
   const updateData: { aiActive: boolean; queueId?: number } = { aiActive: false };
-  if (supportQueue && !ticket.queueId) updateData.queueId = supportQueue.id;
+  if (supportQueue) updateData.queueId = supportQueue.id; // Always assign Soporte queue on escalation
   await ticket.update(updateData);
 
   const io = getIO();
@@ -303,13 +307,13 @@ const escalateToHuman = async (
 
   // Internal AI summary for agents
   try {
-    const summary = await getTicketSummary(ticket.id);
-    if (summary) {
+    const summaryResult = await getTicketSummary(ticket.id);
+    if (summaryResult?.summary) {
       await CreateMessageService({
         messageData: {
           id: `tg-internal-${ticket.id}-${Date.now()}`,
           ticketId: ticket.id,
-          body: `*Resumen IA del caso (Telegram):*\n${summary}`,
+          body: `*Resumen IA del caso (Telegram):*\n${summaryResult.summary}`,
           fromMe: true, read: true, isInternal: true, ack: 2
         }
       });

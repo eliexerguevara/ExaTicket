@@ -76,7 +76,7 @@ const ListTicketsService = async ({
   ];
 
   if (showAll === "true") {
-    whereCondition = { queueId: { [Op.or]: [queueIds, null] } };
+    whereCondition = {}; // Admin: no restrictions — show all tickets
   }
 
   if (status) {
