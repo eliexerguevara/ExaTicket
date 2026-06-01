@@ -8,6 +8,7 @@ import UpdateTicketService from "../services/TicketServices/UpdateTicketService"
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import { getIO } from "../libs/socket";
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
+import { getBotInstance } from "../services/TelegramService/TelegramBotService";
 import Contact from "../models/Contact";
 import Whatsapp from "../models/Whatsapp";
 import { logger } from "../utils/logger";
@@ -187,14 +188,26 @@ export const broadcast = async (
   for (const ticket of tickets) {
     const contact: any = (ticket as any).contact;
     const contactNumber: string = contact?.number;
-    if (!contactNumber || !ticket.whatsappId) continue;
+    // Must have contact number and at least one channel (WhatsApp or Telegram)
+    if (!contactNumber || (!ticket.whatsappId && !ticket.telegramId)) continue;
 
     try {
-      await whatsappProvider.sendMessage(
-        ticket.whatsappId,
-        `${contactNumber}@c.us`,
-        message
-      );
+      if (ticket.whatsappId) {
+        // WhatsApp broadcast
+        await whatsappProvider.sendMessage(
+          ticket.whatsappId,
+          `${contactNumber}@c.us`,
+          message
+        );
+      } else if (ticket.telegramId) {
+        // Telegram broadcast — contactNumber IS the Telegram chat ID
+        const bot = getBotInstance(ticket.telegramId);
+        if (!bot) {
+          errors.push(`ticket ${ticket.id}: Telegram bot not available (id=${ticket.telegramId})`);
+          continue;
+        }
+        await (bot as any).sendMessage(Number(contactNumber), message, { parse_mode: "Markdown" });
+      }
 
       // Save the broadcast message in the ticket so agents can see it
       const msgId = `broadcast-${ticket.id}-${Date.now()}`;
