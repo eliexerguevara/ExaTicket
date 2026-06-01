@@ -168,8 +168,13 @@ const Ticket = () => {
         {ticket.id && (
           <TicketLabels
             ticket={ticket}
-            onUpdate={() => {
-              api.get("/tickets/" + ticketId).then(({ data }) => setTicket(data)).catch(() => {});
+            onUpdate={(updatedTicket) => {
+              // If the label API returned the full ticket, use it directly (no extra GET needed)
+              if (updatedTicket && updatedTicket.id) {
+                setTicket(updatedTicket);
+              } else {
+                api.get("/tickets/" + ticketId).then(({ data }) => setTicket(data)).catch(() => {});
+              }
             }}
           />
         )}

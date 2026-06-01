@@ -89,8 +89,9 @@ const TicketLabels = ({ ticket, onUpdate }) => {
     setAnchorEl(null);
     setLoading(true);
     try {
-      await api.post(`/tickets/${ticket.id}/labels/${labelId}`);
-      if (typeof onUpdate === "function") onUpdate();
+      const { data } = await api.post(`/tickets/${ticket.id}/labels/${labelId}`);
+      // Use the response directly — backend returns full ticket via ShowTicketService
+      if (typeof onUpdate === "function") onUpdate(data);
     } catch (err) {
       toastError(err);
     } finally {
@@ -101,8 +102,9 @@ const TicketLabels = ({ ticket, onUpdate }) => {
   const handleRemove = async labelId => {
     setLoading(true);
     try {
-      await api.delete(`/tickets/${ticket.id}/labels/${labelId}`);
-      if (typeof onUpdate === "function") onUpdate();
+      const { data } = await api.delete(`/tickets/${ticket.id}/labels/${labelId}`);
+      // Use the response directly — backend returns full ticket via ShowTicketService
+      if (typeof onUpdate === "function") onUpdate(data);
     } catch (err) {
       toastError(err);
     } finally {
