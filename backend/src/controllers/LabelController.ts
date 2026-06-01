@@ -5,6 +5,7 @@ import Label from "../models/Label";
 import Ticket from "../models/Ticket";
 import TicketLabel from "../models/TicketLabel";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
+import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import { getIO } from "../libs/socket";
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
 import Contact from "../models/Contact";
@@ -57,17 +58,13 @@ export const addToTicket = async (
     where: { ticketId: Number(ticketId), labelId: Number(labelId) }
   });
 
-  const ticket = await Ticket.findByPk(ticketId, {
-    include: [
-      { model: Label, as: "labels" },
-      { model: Contact, as: "contact", attributes: ["id", "name", "number", "profilePicUrl"] },
-      { model: Whatsapp, as: "whatsapp", attributes: ["name"] }
-    ]
-  });
+  // Use ShowTicketService so the socket event always carries the full ticket
+  // (labels, user, queue, contact, whatsapp) — prevents fields from disappearing
+  const ticket = await ShowTicketService(ticketId);
 
   const io = getIO();
   io.to("notification")
-    .to(ticket?.status || "")
+    .to(ticket.status)
     .to(ticketId.toString())
     .emit("ticket", { action: "update", ticket });
 
@@ -84,17 +81,12 @@ export const removeFromTicket = async (
     where: { ticketId: Number(ticketId), labelId: Number(labelId) }
   });
 
-  const ticket = await Ticket.findByPk(ticketId, {
-    include: [
-      { model: Label, as: "labels" },
-      { model: Contact, as: "contact", attributes: ["id", "name", "number", "profilePicUrl"] },
-      { model: Whatsapp, as: "whatsapp", attributes: ["name"] }
-    ]
-  });
+  // Use ShowTicketService so the socket event always carries the full ticket
+  const ticket = await ShowTicketService(ticketId);
 
   const io = getIO();
   io.to("notification")
-    .to(ticket?.status || "")
+    .to(ticket.status)
     .to(ticketId.toString())
     .emit("ticket", { action: "update", ticket });
 

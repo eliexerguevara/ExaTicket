@@ -12,6 +12,7 @@ import {
 import LabelIcon from "@material-ui/icons/Label";
 import AddIcon from "@material-ui/icons/Add";
 import CancelIcon from "@material-ui/icons/Cancel";
+import CloseIcon from "@material-ui/icons/Close";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -125,11 +126,7 @@ const TicketLabels = ({ ticket, onUpdate }) => {
           size="small"
           className={classes.chip}
           style={{ backgroundColor: label.color }}
-          deleteIcon={
-            <Tooltip title={i18n.t("ticketLabels.removeTooltip")}>
-              <CancelIcon />
-            </Tooltip>
-          }
+          deleteIcon={<CloseIcon style={{ fontSize: 13, color: "rgba(255,255,255,0.9)" }} />}
           onDelete={() => handleRemove(label.id)}
         />
       ))}
