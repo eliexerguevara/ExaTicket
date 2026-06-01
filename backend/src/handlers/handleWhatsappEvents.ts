@@ -514,22 +514,11 @@ const handleAISupport = async (
     return;
   }
 
-  // ── PHASE 1: First contact — send department routing question ──────────────
-  if (ticket.aiAttempts === 0) {
-    await sendMsg(whatsappId, contactNumber, AI_ROUTING_QUESTION);
-    await ticket.update({ aiAttempts: 1 });
-    return;
-  }
-
-  // ── PHASE 2: Process department selection ─────────────────────────────────
-  if (ticket.aiAttempts === 1) {
-    const choice = parseRoutingChoice(messageBody);
-
-    // Route to Administración or Ventas queue
+  // ── Helper: execute routing once a choice is known ───────────────────────
+  const applyRoutingChoice = async (choice: RoutingChoice): Promise<boolean> => {
     if (choice === "administracion" || choice === "ventas") {
-      const keyword = choice === "administracion" ? "dmin" : "enta"; // matches "Administración" / "Ventas"
+      const keyword = choice === "administracion" ? "dmin" : "enta";
       const queue = await findQueueByName(keyword);
-
       if (queue) {
         await UpdateTicketService({
           ticketData: { queueId: queue.id, aiActive: false },
@@ -541,33 +530,21 @@ const handleAISupport = async (
           `Un momento, te conectamos con ${queue.name}. 🙏`
         );
       } else {
-        // Queue not configured — send to any available operator
-        await escalateToHuman(
-          ticket,
-          whatsappId,
-          contactNumber,
-          "queue_not_found"
-        );
+        await escalateToHuman(ticket, whatsappId, contactNumber, "queue_not_found");
       }
-      return;
+      return true;
     }
 
-    // Route to AI support
     if (choice === "soporte") {
-      // ── Verify customer in Splynx before opening support ──────────────────
       let splynxEnabled = false;
       try { splynxEnabled = (await CheckSettings("splynxEnabled")) === "enabled"; } catch { /* ignore */ }
 
       if (splynxEnabled) {
-        // For WhatsApp the contactNumber IS the real phone — likely to find a match
         const check = await getSplynxInfo(contactNumber, false);
-
         if (check.customerId) {
-          // Found — skip verification phase, go straight to support
           await ticket.update({ aiAttempts: 3 });
           await sendMsg(whatsappId, contactNumber, "Con gusto te ayudo. ¿Cuál es el problema técnico?");
         } else {
-          // Not found — enter verification phase
           await ticket.update({ aiAttempts: 2 });
           await sendMsg(
             whatsappId,
@@ -578,15 +555,39 @@ const handleAISupport = async (
           );
         }
       } else {
-        // Splynx not enabled — skip verification
         await ticket.update({ aiAttempts: 3 });
         await sendMsg(whatsappId, contactNumber, "Con gusto te ayudo. ¿Cuál es el problema técnico?");
       }
-      return;
+      return true;
     }
 
-    // Unrecognized response — ask again
-    await sendMsg(whatsappId, contactNumber, AI_ROUTING_INVALID);
+    return false; // choice is null — not detected
+  };
+
+  // ── PHASE 1: First contact — try to auto-detect department from message ───
+  if (ticket.aiAttempts === 0) {
+    await ticket.update({ aiAttempts: 1 });
+
+    const autoChoice = parseRoutingChoice(messageBody);
+    if (autoChoice !== null) {
+      // Detected from first message — route automatically without showing menu
+      logger.info(`Ticket ${ticket.id}: auto-routed to "${autoChoice}" from first message`);
+      await applyRoutingChoice(autoChoice);
+    } else {
+      // Cannot detect — ask user to pick
+      await sendMsg(whatsappId, contactNumber, AI_ROUTING_QUESTION);
+    }
+    return;
+  }
+
+  // ── PHASE 2: Process department selection (user replied to menu) ──────────
+  if (ticket.aiAttempts === 1) {
+    const choice = parseRoutingChoice(messageBody);
+    const routed = await applyRoutingChoice(choice);
+    if (!routed) {
+      // Unrecognized response — ask again (don't increment aiAttempts)
+      await sendMsg(whatsappId, contactNumber, AI_ROUTING_INVALID);
+    }
     return;
   }
 

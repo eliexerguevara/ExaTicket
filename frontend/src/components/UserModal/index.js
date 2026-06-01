@@ -227,6 +227,7 @@ const UserModal = ({ open, onClose, userId }) => {
 														id="profile-selection"
 														required
 													>
+														<MenuItem value="superadmin">Super Admin</MenuItem>
 														<MenuItem value="admin">Admin</MenuItem>
 														<MenuItem value="user">User</MenuItem>
 													</Field>

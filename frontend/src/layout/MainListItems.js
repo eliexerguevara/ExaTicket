@@ -139,10 +139,16 @@ const MainListItems = (props) => {
               primary="Telegram"
               icon={<TelegramIcon />}
             />
-            <ListItemLink
-              to="/settings"
-              primary={i18n.t("mainDrawer.listItems.settings")}
-              icon={<SettingsOutlinedIcon />}
+            <Can
+              role={user.profile}
+              perform="settings:view"
+              yes={() => (
+                <ListItemLink
+                  to="/settings"
+                  primary={i18n.t("mainDrawer.listItems.settings")}
+                  icon={<SettingsOutlinedIcon />}
+                />
+              )}
             />
           </>
         )}

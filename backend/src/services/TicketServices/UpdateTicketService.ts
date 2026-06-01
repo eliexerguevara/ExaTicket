@@ -58,26 +58,29 @@ const UpdateTicketService = async ({
     });
   }
 
-  await ticket.reload();
+  // Re-fetch with all associations (labels, contact, queue, user…) so the
+  // socket event always carries the complete ticket — prevents labels from
+  // disappearing when the frontend receives the update.
+  const updatedTicket = await ShowTicketService(ticketId);
 
   const io = getIO();
 
-  if (ticket.status !== oldStatus || ticket.user?.id !== oldUserId) {
+  if (updatedTicket.status !== oldStatus || updatedTicket.user?.id !== oldUserId) {
     io.to(oldStatus).emit("ticket", {
       action: "delete",
-      ticketId: ticket.id
+      ticketId: updatedTicket.id
     });
   }
 
-  io.to(ticket.status)
+  io.to(updatedTicket.status)
     .to("notification")
     .to(ticketId.toString())
     .emit("ticket", {
       action: "update",
-      ticket
+      ticket: updatedTicket
     });
 
-  return { ticket, oldStatus, oldUserId };
+  return { ticket: updatedTicket, oldStatus, oldUserId };
 };
 
 export default UpdateTicketService;

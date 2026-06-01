@@ -34,7 +34,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     (await CheckSettingsHelper("userCreation")) === "disabled"
   ) {
     throw new AppError("ERR_USER_CREATION_DISABLED", 403);
-  } else if (req.url !== "/signup" && req.user.profile !== "admin") {
+  } else if (
+    req.url !== "/signup" &&
+    req.user.profile !== "admin" &&
+    req.user.profile !== "superadmin"
+  ) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -68,7 +72,7 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  if (req.user.profile !== "admin") {
+  if (req.user.profile !== "admin" && req.user.profile !== "superadmin") {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -92,7 +96,7 @@ export const remove = async (
 ): Promise<Response> => {
   const { userId } = req.params;
 
-  if (req.user.profile !== "admin") {
+  if (req.user.profile !== "admin" && req.user.profile !== "superadmin") {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
