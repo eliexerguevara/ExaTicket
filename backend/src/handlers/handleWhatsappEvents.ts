@@ -504,6 +504,21 @@ const handleAISupport = async (
     lowerBody.includes(kw)
   );
   if (userWantsHuman) {
+    // If they also specified a department (e.g. "quiero hablar con ventas"),
+    // route to that queue instead of defaulting to Soporte
+    const deptChoice = parseRoutingChoice(messageBody);
+    if (deptChoice === "ventas" || deptChoice === "administracion") {
+      const deptKeyword = deptChoice === "administracion" ? "dmin" : "enta";
+      const deptQueue = await findQueueByName(deptKeyword);
+      if (deptQueue) {
+        await UpdateTicketService({
+          ticketData: { queueId: deptQueue.id, aiActive: false },
+          ticketId: ticket.id
+        });
+        await sendMsg(whatsappId, contactNumber, `Un momento, te conectamos con ${deptQueue.name}. 🙏`);
+        return;
+      }
+    }
     await escalateToHuman(ticket, whatsappId, contactNumber, "user_request");
     return;
   }

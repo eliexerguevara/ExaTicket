@@ -356,6 +356,21 @@ const handleAIForTelegram = async (
 
   // Always allow human escalation request
   if (HUMAN_REQUEST_KEYWORDS.some(kw => lowerBody.includes(kw))) {
+    // If they also specified a department (e.g. "quiero hablar con ventas"),
+    // route to that queue instead of defaulting to Soporte
+    const deptChoice = parseRoutingChoice(messageBody);
+    if (deptChoice === "ventas" || deptChoice === "administracion") {
+      const deptKeyword = deptChoice === "administracion" ? "dmin" : "enta";
+      const deptQueue = await findQueueByName(deptKeyword);
+      if (deptQueue) {
+        await UpdateTicketService({
+          ticketData: { queueId: deptQueue.id, aiActive: false },
+          ticketId: ticket.id
+        });
+        await sendWithTyping(bot, chatId, `Un momento, te conectamos con ${deptQueue.name}. 🙏`, ticket.id);
+        return;
+      }
+    }
     await escalateToHuman(bot, ticket, chatId, "user_request");
     return;
   }
