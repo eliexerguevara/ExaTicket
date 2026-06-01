@@ -24,6 +24,7 @@ import CreateOrUpdateContactService from "../services/ContactServices/CreateOrUp
 import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTicketService";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
+import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import CreateContactService from "../services/ContactServices/CreateContactService";
 import { getAIResponse, getTicketSummary } from "../services/AIServices/GetAIResponse";
 import CheckSettings from "../helpers/CheckSettings";
@@ -337,11 +338,9 @@ const autoApplyLabel = async (
     await TicketLabel.findOrCreate({
       where: { ticketId, labelId: label.id }
     });
-    // Emit socket update so frontend refreshes immediately
+    // Emit socket update so frontend refreshes with complete ticket (labels, user, queue, etc.)
     const io = getIO();
-    const ticket = await Ticket.findByPk(ticketId, {
-      include: [{ model: Label, as: "labels" }]
-    });
+    const ticket = await ShowTicketService(ticketId);
     if (ticket) {
       io.to("notification")
         .to(ticket.status)
@@ -430,13 +429,8 @@ const escalateToHuman = async (
   await ticket.update(updateData);
 
   // Apply "Soporte Tecnico" label so escalated tickets are easily identified
+  // autoApplyLabel already emits the full ticket via ShowTicketService — no extra emit needed
   await autoApplyLabel(ticket.id, "Soporte Tecnico", "#ef4444");
-
-  const io = getIO();
-  io.to("notification").to(ticket.status).emit("ticket", {
-    action: "update",
-    ticket
-  });
 
   try {
     await whatsappProvider.sendMessage(
