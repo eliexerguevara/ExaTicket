@@ -35,6 +35,26 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
   const label = await Label.findByPk(id);
   if (!label) return res.status(404).json({ error: "Label not found" });
   await label.update({ ...(name && { name }), ...(color && { color }) });
+
+  // Notify frontend so live ticket views show the new name/color immediately
+  const affectedTicketLabels = await TicketLabel.findAll({
+    where: { labelId: Number(id) }
+  });
+  if (affectedTicketLabels.length > 0) {
+    const io = getIO();
+    for (const tl of affectedTicketLabels) {
+      try {
+        const ticket = await ShowTicketService(tl.ticketId);
+        io.to("notification")
+          .to(ticket.status)
+          .to(tl.ticketId.toString())
+          .emit("ticket", { action: "update", ticket });
+      } catch {
+        // ticket may have been closed; skip silently
+      }
+    }
+  }
+
   return res.json(label);
 };
 
@@ -42,7 +62,31 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   const { id } = req.params;
   const label = await Label.findByPk(id);
   if (!label) return res.status(404).json({ error: "Label not found" });
+
+  // Find affected tickets BEFORE destroying (CASCADE will remove TicketLabel rows)
+  const affectedTicketLabels = await TicketLabel.findAll({
+    where: { labelId: Number(id) }
+  });
+  const affectedTicketIds = affectedTicketLabels.map(tl => tl.ticketId);
+
   await label.destroy();
+
+  // Notify frontend so live ticket views refresh and remove the deleted chip
+  if (affectedTicketIds.length > 0) {
+    const io = getIO();
+    for (const ticketId of affectedTicketIds) {
+      try {
+        const ticket = await ShowTicketService(ticketId);
+        io.to("notification")
+          .to(ticket.status)
+          .to(ticketId.toString())
+          .emit("ticket", { action: "update", ticket });
+      } catch {
+        // ticket may have been closed; skip silently
+      }
+    }
+  }
+
   return res.status(200).json({ message: "Label deleted" });
 };
 
@@ -53,22 +97,26 @@ export const addToTicket = async (
   res: Response
 ): Promise<Response> => {
   const { ticketId, labelId } = req.params;
+  try {
+    await TicketLabel.findOrCreate({
+      where: { ticketId: Number(ticketId), labelId: Number(labelId) }
+    });
 
-  await TicketLabel.findOrCreate({
-    where: { ticketId: Number(ticketId), labelId: Number(labelId) }
-  });
+    // Use ShowTicketService so the socket event always carries the full ticket
+    // (labels, user, queue, contact, whatsapp) — prevents fields from disappearing
+    const ticket = await ShowTicketService(ticketId);
 
-  // Use ShowTicketService so the socket event always carries the full ticket
-  // (labels, user, queue, contact, whatsapp) — prevents fields from disappearing
-  const ticket = await ShowTicketService(ticketId);
+    const io = getIO();
+    io.to("notification")
+      .to(ticket.status)
+      .to(ticketId.toString())
+      .emit("ticket", { action: "update", ticket });
 
-  const io = getIO();
-  io.to("notification")
-    .to(ticket.status)
-    .to(ticketId.toString())
-    .emit("ticket", { action: "update", ticket });
-
-  return res.json(ticket);
+    return res.json(ticket);
+  } catch (err) {
+    logger.error(err, `addToTicket error: ticketId=${ticketId} labelId=${labelId}`);
+    return res.status(500).json({ error: "Failed to add label to ticket" });
+  }
 };
 
 export const removeFromTicket = async (
@@ -76,21 +124,25 @@ export const removeFromTicket = async (
   res: Response
 ): Promise<Response> => {
   const { ticketId, labelId } = req.params;
+  try {
+    await TicketLabel.destroy({
+      where: { ticketId: Number(ticketId), labelId: Number(labelId) }
+    });
 
-  await TicketLabel.destroy({
-    where: { ticketId: Number(ticketId), labelId: Number(labelId) }
-  });
+    // Use ShowTicketService so the socket event always carries the full ticket
+    const ticket = await ShowTicketService(ticketId);
 
-  // Use ShowTicketService so the socket event always carries the full ticket
-  const ticket = await ShowTicketService(ticketId);
+    const io = getIO();
+    io.to("notification")
+      .to(ticket.status)
+      .to(ticketId.toString())
+      .emit("ticket", { action: "update", ticket });
 
-  const io = getIO();
-  io.to("notification")
-    .to(ticket.status)
-    .to(ticketId.toString())
-    .emit("ticket", { action: "update", ticket });
-
-  return res.json(ticket);
+    return res.json(ticket);
+  } catch (err) {
+    logger.error(err, `removeFromTicket error: ticketId=${ticketId} labelId=${labelId}`);
+    return res.status(500).json({ error: "Failed to remove label from ticket" });
+  }
 };
 
 // ── Broadcast ─────────────────────────────────────────────────────────────────

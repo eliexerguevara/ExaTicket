@@ -233,10 +233,10 @@ const autoApplyLabel = async (ticketId: number, labelName: string, color = "#ef4
       defaults: { name: labelName, color }
     });
     await TicketLabel.findOrCreate({ where: { ticketId, labelId: label.id } });
+    // Use ShowTicketService so the socket event carries the full ticket
+    // (labels, user, queue, contact) — prevents fields from disappearing in the UI
     const io = getIO();
-    const ticket = await Ticket.findByPk(ticketId, {
-      include: [{ model: Label, as: "labels" }]
-    });
+    const ticket = await ShowTicketService(ticketId);
     if (ticket) {
       io.to("notification").to(ticket.status).to(ticketId.toString())
         .emit("ticket", { action: "update", ticket });
@@ -320,10 +320,8 @@ const escalateToHuman = async (
   await ticket.update(updateData);
 
   // Apply "Soporte Tecnico" label so escalated tickets are easily identified
+  // autoApplyLabel emits the full ticket via ShowTicketService — no extra emit needed
   await autoApplyLabel(ticket.id, "Soporte Tecnico", "#ef4444");
-
-  const io = getIO();
-  io.to("notification").to(ticket.status).emit("ticket", { action: "update", ticket });
 
   await sendWithTyping(bot, chatId, msg, ticket.id);
 

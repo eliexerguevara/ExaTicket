@@ -11,7 +11,6 @@ import {
 } from "@material-ui/core";
 import LabelIcon from "@material-ui/icons/Label";
 import AddIcon from "@material-ui/icons/Add";
-import CancelIcon from "@material-ui/icons/Cancel";
 import CloseIcon from "@material-ui/icons/Close";
 
 import api from "../../services/api";
@@ -81,9 +80,16 @@ const TicketLabels = ({ ticket, onUpdate }) => {
   const ticketLabels = ticket?.labels || [];
   const appliedIds = new Set(ticketLabels.map(l => l.id));
 
+  // Refresh the full label list when the component mounts or the dropdown opens
   useEffect(() => {
     api.get("/labels").then(({ data }) => setAllLabels(data)).catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch available labels when the dropdown is opened so newly created labels appear
+  const handleOpenMenu = e => {
+    api.get("/labels").then(({ data }) => setAllLabels(data)).catch(() => {});
+    setAnchorEl(e.currentTarget);
+  };
 
   const handleAdd = async labelId => {
     setAnchorEl(null);
@@ -141,7 +147,7 @@ const TicketLabels = ({ ticket, onUpdate }) => {
             <IconButton
               size="small"
               className={classes.addBtn}
-              onClick={e => setAnchorEl(e.currentTarget)}
+              onClick={handleOpenMenu}
             >
               <AddIcon style={{ fontSize: 14 }} />
             </IconButton>
