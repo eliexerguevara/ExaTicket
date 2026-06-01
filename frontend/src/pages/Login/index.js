@@ -14,7 +14,7 @@ import {
 import { Visibility, VisibilityOff } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
 
-import logo from "../../assets/logo.svg";
+import logo from "../../assets/logo.png";
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
 
