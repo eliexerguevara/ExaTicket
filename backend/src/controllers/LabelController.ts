@@ -158,30 +158,33 @@ export const broadcast = async (
     return res.status(400).json({ error: "message is required" });
   }
 
-  // Find all open/pending tickets with this label
-  const ticketLabels = await TicketLabel.findAll({
-    where: { labelId: Number(labelId) },
+  // Step 1: get ticketIds (TicketLabel has no BelongsTo assoc → no join possible)
+  const ticketLabelRows = await TicketLabel.findAll({
+    where: { labelId: Number(labelId) }
+  });
+  const ticketIds = ticketLabelRows.map(tl => tl.ticketId);
+
+  if (ticketIds.length === 0) {
+    return res.json({ sent: 0, total: 0 });
+  }
+
+  // Step 2: fetch open/pending tickets with contact + whatsapp
+  const tickets = await Ticket.findAll({
+    where: {
+      id: { [Op.in]: ticketIds },
+      status: { [Op.in]: ["open", "pending"] }
+    },
     include: [
-      {
-        model: Ticket,
-        as: "ticket",
-        where: { status: { [Op.in]: ["open", "pending"] } },
-        include: [
-          { model: Contact, as: "contact" },
-          { model: Whatsapp, as: "whatsapp" }
-        ]
-      }
+      { model: Contact, as: "contact" },
+      { model: Whatsapp, as: "whatsapp" }
     ]
   });
 
   let sent = 0;
-  const total = ticketLabels.length;
+  const total = tickets.length;
   const errors: string[] = [];
 
-  for (const tl of ticketLabels as any[]) {
-    const ticket: Ticket = tl.ticket;
-    if (!ticket) continue;
-
+  for (const ticket of tickets) {
     const contact: any = (ticket as any).contact;
     const contactNumber: string = contact?.number;
     if (!contactNumber || !ticket.whatsappId) continue;
