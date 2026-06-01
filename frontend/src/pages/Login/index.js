@@ -50,8 +50,8 @@ const useStyles = makeStyles(() => ({
     marginBottom: 36,
   },
   brandLogo: {
-    width: 44,
-    height: 44,
+    width: 72,
+    height: 72,
   },
   brandName: {
     fontSize: "1.9rem",
