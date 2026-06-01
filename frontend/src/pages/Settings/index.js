@@ -129,6 +129,17 @@ const Settings = () => {
 	const [testingZabbix, setTestingZabbix] = useState(false);
 	const [zabbixTestResult, setZabbixTestResult] = useState(null); // { ok, message }
 
+	// SMTP / Email state
+	const [smtpHost, setSmtpHost] = useState("");
+	const [smtpPort, setSmtpPort] = useState("587");
+	const [smtpUser, setSmtpUser] = useState("");
+	const [smtpPass, setSmtpPass] = useState("");
+	const [smtpFrom, setSmtpFrom] = useState("");
+	const [showSmtpPass, setShowSmtpPass] = useState(false);
+	const [testEmailTo, setTestEmailTo] = useState("");
+	const [testingEmail, setTestingEmail] = useState(false);
+	const [emailTestResult, setEmailTestResult] = useState(null); // { ok, message }
+
 	useEffect(() => {
 		const fetchSession = async () => {
 			try {
@@ -147,6 +158,11 @@ const Settings = () => {
 				setZabbixApiToken(find("zabbixApiToken"));
 				setZabbixApiUser(find("zabbixApiUser"));
 				setZabbixApiPassword(find("zabbixApiPassword"));
+				setSmtpHost(find("smtpHost"));
+				setSmtpPort(find("smtpPort") || "587");
+				setSmtpUser(find("smtpUser"));
+				setSmtpPass(find("smtpPass"));
+				setSmtpFrom(find("smtpFrom"));
 			} catch (err) {
 				toastError(err);
 			}
@@ -238,6 +254,37 @@ const Settings = () => {
 			toast.success(i18n.t("settings.success"));
 		} catch (err) {
 			toastError(err);
+		}
+	};
+
+	const handleSaveSmtp = async () => {
+		try {
+			await Promise.all([
+				api.put("/settings/smtpHost", { value: smtpHost }),
+				api.put("/settings/smtpPort", { value: smtpPort }),
+				api.put("/settings/smtpUser", { value: smtpUser }),
+				api.put("/settings/smtpPass", { value: smtpPass }),
+				api.put("/settings/smtpFrom", { value: smtpFrom }),
+			]);
+			toast.success(i18n.t("settings.success"));
+		} catch (err) {
+			toastError(err);
+		}
+	};
+
+	const handleTestEmail = async () => {
+		setTestingEmail(true);
+		setEmailTestResult(null);
+		try {
+			const { data } = await api.post("/settings/test-email", {
+				smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom,
+				testTo: testEmailTo,
+			});
+			setEmailTestResult(data);
+		} catch (err) {
+			setEmailTestResult({ ok: false, message: err?.response?.data?.message || "Error al enviar el correo" });
+		} finally {
+			setTestingEmail(false);
 		}
 	};
 
@@ -633,6 +680,129 @@ const Settings = () => {
 								onClick={handleSaveZabbix}
 							>
 								{i18n.t("aiChat.settings.save")}
+							</Button>
+						</div>
+
+					</AccordionDetails>
+				</Accordion>
+
+				{/* ── Email / SMTP ─────────────────────────────────── */}
+				<Divider style={{ margin: "16px 0" }} />
+				<Typography variant="body1" className={classes.sectionTitle}>
+					📧 Correo electrónico (SMTP)
+				</Typography>
+
+				<Accordion className={classes.accordionRoot} defaultExpanded={false}>
+					<AccordionSummary
+						expandIcon={<ExpandMoreIcon />}
+						className={classes.accordionSummary}
+					>
+						<Typography style={{ fontWeight: 600 }}>
+							🔑 Configuración del servidor SMTP
+						</Typography>
+					</AccordionSummary>
+					<AccordionDetails className={classes.accordionDetails}>
+
+						<TextField
+							label="Servidor SMTP"
+							helperText="Ej: smtp.gmail.com · smtp.office365.com"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={smtpHost}
+							onChange={e => { setSmtpHost(e.target.value); setEmailTestResult(null); }}
+						/>
+
+						<TextField
+							label="Puerto"
+							helperText="587 (TLS) · 465 (SSL) · 25 (sin cifrado)"
+							margin="dense"
+							variant="outlined"
+							type="number"
+							style={{ maxWidth: 160 }}
+							value={smtpPort}
+							onChange={e => { setSmtpPort(e.target.value); setEmailTestResult(null); }}
+						/>
+
+						<TextField
+							label="Usuario / Email"
+							helperText="Cuenta de correo que enviará los emails"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={smtpUser}
+							onChange={e => { setSmtpUser(e.target.value); setEmailTestResult(null); }}
+						/>
+
+						<TextField
+							label="Contraseña"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							type={showSmtpPass ? "text" : "password"}
+							value={smtpPass}
+							onChange={e => { setSmtpPass(e.target.value); setEmailTestResult(null); }}
+							InputProps={{
+								endAdornment: (
+									<InputAdornment position="end">
+										<IconButton size="small" onClick={() => setShowSmtpPass(v => !v)}>
+											{showSmtpPass ? <VisibilityOffIcon /> : <VisibilityIcon />}
+										</IconButton>
+									</InputAdornment>
+								),
+							}}
+						/>
+
+						<TextField
+							label="Remitente (From)"
+							helperText='Opcional · Ej: ExaTicket <soporte@miempresa.com>'
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={smtpFrom}
+							onChange={e => { setSmtpFrom(e.target.value); setEmailTestResult(null); }}
+						/>
+
+						<Divider style={{ margin: "8px 0" }} />
+
+						<Typography variant="subtitle2" style={{ fontWeight: 600, color: "#374151" }}>
+							Enviar correo de prueba
+						</Typography>
+
+						<TextField
+							label="Enviar prueba a..."
+							helperText="Dirección donde recibirás el correo de test"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={testEmailTo}
+							onChange={e => { setTestEmailTo(e.target.value); setEmailTestResult(null); }}
+						/>
+
+						{emailTestResult && (
+							<Typography className={emailTestResult.ok ? classes.testOk : classes.testFail}>
+								{emailTestResult.ok ? "✅" : "❌"} {emailTestResult.message}
+							</Typography>
+						)}
+
+						<div className={classes.btnRow}>
+							<Button
+								variant="outlined"
+								color="primary"
+								size="small"
+								disabled={testingEmail || !smtpHost || !smtpUser || !smtpPass || !testEmailTo}
+								onClick={handleTestEmail}
+								startIcon={testingEmail ? <CircularProgress size={14} /> : null}
+							>
+								{testingEmail ? "Enviando..." : "Enviar prueba"}
+							</Button>
+							<Button
+								variant="contained"
+								color="primary"
+								size="small"
+								onClick={handleSaveSmtp}
+							>
+								Guardar
 							</Button>
 						</div>
 
