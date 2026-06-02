@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useReducer, useRef } from "react";
+import { getProxiedMediaUrl } from "../../config";
 
 import { isSameDay, parseISO, format } from "date-fns";
 import openSocket from "../../services/socket-io";
@@ -518,12 +519,12 @@ const MessagesList = ({ ticketId, isGroup }) => {
     else if ( /^.*\.(jpe?g|png|gif)?$/i.exec(message.mediaUrl) && message.mediaType === "image") {
       return <ModalImageCors imageUrl={message.mediaUrl} />;
     } else if (message.mediaType === "audio") {
-      return <Audio url={message.mediaUrl} />
+      return <Audio url={getProxiedMediaUrl(message.mediaUrl)} />
     } else if (message.mediaType === "video") {
       return (
         <video
           className={classes.messageMedia}
-          src={message.mediaUrl}
+          src={getProxiedMediaUrl(message.mediaUrl)}
           controls
         />
       );
@@ -536,7 +537,7 @@ const MessagesList = ({ ticketId, isGroup }) => {
               color="primary"
               variant="outlined"
               target="_blank"
-              href={message.mediaUrl}
+              href={getProxiedMediaUrl(message.mediaUrl)}
             >
               Download
             </Button>

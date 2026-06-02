@@ -3,6 +3,7 @@ import { makeStyles } from "@material-ui/core/styles";
 
 import ModalImage from "react-modal-image";
 import api from "../../services/api";
+import { getProxiedMediaUrl } from "../../config";
 
 const useStyles = makeStyles(theme => ({
 	messageMedia: {
@@ -24,7 +25,7 @@ const ModalImageCors = ({ imageUrl }) => {
 	useEffect(() => {
 		if (!imageUrl) return;
 		const fetchImage = async () => {
-			const { data, headers } = await api.get(imageUrl, {
+			const { data, headers } = await api.get(getProxiedMediaUrl(imageUrl), {
 				responseType: "blob",
 			});
 			const url = window.URL.createObjectURL(
