@@ -1,21 +1,155 @@
-MIT License
+LICENCIA DE SOFTWARE COMERCIAL — EXATICKET
+Versión 1.0 — Junio 2026
 
-Copyright (c) 2020 canove
+Copyright (c) 2026 Eliexer Guevara. Todos los derechos reservados.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+AVISO IMPORTANTE: Lea este acuerdo antes de instalar, copiar o usar
+el software ExaTicket.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. DEFINICIONES
+
+"Software" significa ExaTicket, incluyendo todo su codigo fuente,
+codigo compilado, documentacion, actualizaciones y materiales
+relacionados desarrollados por el Licenciante.
+
+"Licenciante" significa Eliexer Guevara, titular de los derechos
+de propiedad intelectual sobre ExaTicket.
+
+"Licenciatario" (o "Cliente") significa la persona natural o
+juridica que adquiere una licencia de uso del Software.
+
+"Instancia" significa una instalacion unica del Software operando
+en un servidor o entorno definido.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2. CONCESION DE LICENCIA
+
+Sujeto al pago de la tarifa acordada y al cumplimiento de este
+acuerdo, el Licenciante otorga al Licenciatario una licencia:
+
+  - No exclusiva
+  - No transferible
+  - Limitada al numero de instancias contratadas
+  - Para uso interno en las operaciones del Licenciatario
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3. USOS PERMITIDOS
+
+El Licenciatario PUEDE:
+
+  - Instalar y usar el Software en el numero de instancias
+    contratadas
+  - Realizar copias de seguridad del Software
+  - Configurar y personalizar la interfaz (logos, colores, textos)
+    para uso interno
+  - Acceder al codigo fuente si asi se acordo en el contrato
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4. RESTRICCIONES
+
+El Licenciatario NO PUEDE, sin autorizacion escrita del Licenciante:
+
+  - Revender, sublicenciar, arrendar o transferir el Software
+    a terceros
+  - Distribuir el Software en forma total o parcial
+  - Eliminar o alterar avisos de copyright o marcas del Software
+  - Usar el Software para desarrollar un producto competidor
+  - Realizar ingenieria inversa con fines distintos al soporte
+    tecnico propio
+  - Instalar el Software en mas instancias de las contratadas
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5. PROPIEDAD INTELECTUAL
+
+El Software, incluyendo todos los desarrollos, mejoras y
+modificaciones creados por el Licenciante, son y seguiran siendo
+propiedad exclusiva del Licenciante. Esta licencia no transfiere
+ningun derecho de propiedad intelectual al Licenciatario.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6. ACTUALIZACIONES Y SOPORTE
+
+Las actualizaciones y el soporte tecnico se rigen por el contrato
+de servicio vigente entre las partes. Esta licencia no garantiza
+por si sola el derecho a recibir actualizaciones futuras.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+7. GARANTIA LIMITADA Y EXCLUSION DE RESPONSABILIDAD
+
+El Software se proporciona "tal cual" (AS IS). El Licenciante no
+garantiza que el Software este libre de errores o sea adecuado para
+un proposito especifico.
+
+En ningun caso el Licenciante sera responsable por:
+
+  - Perdida de datos o ingresos
+  - Danos indirectos, incidentales o consecuentes
+  - Interrupciones del servicio causadas por terceros (WhatsApp,
+    proveedores de nube, etc.)
+
+La responsabilidad maxima del Licenciante no excedera el monto
+pagado por el Licenciatario en los ultimos 12 meses.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+8. TERMINACION
+
+Esta licencia termina automaticamente si el Licenciatario:
+
+  - Incumple cualquier clausula de este acuerdo
+  - No realiza los pagos acordados en el plazo establecido
+  - Entra en proceso de liquidacion o quiebra
+
+Al terminar, el Licenciatario debera cesar todo uso del Software
+y eliminar todas las copias instaladas.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+9. LEY APLICABLE
+
+Este acuerdo se rige por las leyes de la Republica Bolivariana de
+Venezuela. Cualquier disputa se sometera a los tribunales
+competentes de la jurisdiccion del Licenciante.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Contacto: eliexerguevara16@gmail.com
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AVISOS DE TERCEROS / THIRD-PARTY NOTICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Este Software esta basado en Whaticket (https://github.com/canove/whaticket),
+publicado bajo la siguiente licencia MIT:
+
+  MIT License
+  Copyright (c) 2020 canove
+
+  Permission is hereby granted, free of charge, to any person
+  obtaining a copy of this software and associated documentation
+  files (the "Software"), to deal in the Software without
+  restriction, including without limitation the rights to use,
+  copy, modify, merge, publish, distribute, sublicense, and/or
+  sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following
+  conditions:
+
+  The above copyright notice and this permission notice shall be
+  included in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+  OTHER DEALINGS IN THE SOFTWARE.
