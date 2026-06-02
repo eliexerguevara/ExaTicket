@@ -8,9 +8,14 @@ import authConfig from "../config/auth";
 let io: SocketIO;
 
 export const initIO = (httpServer: Server): SocketIO => {
+  const socketFrontendUrl = process.env.FRONTEND_URL || '';
+  const socketFrontendUrlHttps = process.env.FRONTEND_URL_HTTPS ||
+    socketFrontendUrl.replace(/^http:/, 'https:').replace(/:(\d+)/, (_, p) => ':' + (parseInt(p) + 1));
+  const socketAllowedOrigins = [socketFrontendUrl, socketFrontendUrlHttps].filter(Boolean);
   io = new SocketIO(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL
+      origin: socketAllowedOrigins,
+      credentials: true
     }
   });
 

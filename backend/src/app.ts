@@ -16,10 +16,23 @@ Sentry.init({ dsn: process.env.SENTRY_DSN });
 
 const app = express();
 
+// Allow both HTTP and HTTPS origins from the same host (supports voice notes via HTTPS)
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL_HTTPS
+].filter(Boolean) as string[];
+
 app.use(
   cors({
     credentials: true,
-    origin: process.env.FRONTEND_URL
+    origin: (origin, callback) => {
+      // Allow server-to-server requests (no origin)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.some(o => origin === o || origin.startsWith(o))) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    }
   })
 );
 app.use(cookieParser());

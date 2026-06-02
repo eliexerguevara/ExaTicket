@@ -366,9 +366,12 @@ const MessageInput = ({ ticketStatus }) => {
   const handleStartRecording = async () => {
     setLoading(true);
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error(i18n.t("messageInput.microphoneNotAvailable"));
+      }
       const recorder = await initRecorder();
       if (!recorder) {
-        throw new Error("Recorder not available");
+        throw new Error(i18n.t("messageInput.microphoneNotAvailable"));
       }
       await navigator.mediaDevices.getUserMedia({ audio: true });
       await recorder.start();

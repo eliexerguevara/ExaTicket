@@ -529,6 +529,10 @@ const messages = {
           cancel: "Cancelar",
         },
       },
+      messageInput: {
+        microphoneNotAvailable:
+          "Micrófono no disponible. Para usar notas de voz el sistema debe accederse por HTTPS.",
+      },
       messageOptionsMenu: {
         delete: "Borrar",
         reply: "Responder",
