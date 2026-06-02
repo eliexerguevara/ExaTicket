@@ -247,6 +247,13 @@ const useStyles = makeStyles((theme) => ({
     marginRight: 4,
   },
 
+  editedLabel: {
+    fontSize: "0.65em",
+    opacity: 0.6,
+    fontStyle: "italic",
+    marginRight: 4,
+  },
+
   ackDoneAllIcon: {
     color: green[500],
     fontSize: 18,
@@ -685,6 +692,9 @@ const MessagesList = ({ ticketId, isGroup }) => {
                   {message.quotedMsg && renderQuotedMessage(message)}
                   <MarkdownWrapper>{message.body}</MarkdownWrapper>
                   <span className={classes.timestamp}>
+                    {message.isEdited && (
+                      <span className={classes.editedLabel}>✏️ editado</span>
+                    )}
                     {format(parseISO(message.createdAt), "HH:mm")}
                   </span>
                 </div>
@@ -725,6 +735,9 @@ const MessagesList = ({ ticketId, isGroup }) => {
                   {message.quotedMsg && renderQuotedMessage(message)}
                   <MarkdownWrapper>{message.body}</MarkdownWrapper>
                   <span className={classes.timestamp}>
+                    {message.isEdited && (
+                      <span className={classes.editedLabel}>✏️ editado</span>
+                    )}
                     {format(parseISO(message.createdAt), "HH:mm")}
                     {renderMessageAck(message)}
                   </span>

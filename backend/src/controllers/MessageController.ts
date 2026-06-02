@@ -9,6 +9,7 @@ import ListMessagesService from "../services/MessageServices/ListMessagesService
 import CreateMessageService from "../services/MessageServices/CreateMessageService";
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
+import EditWhatsAppMessage from "../services/WbotServices/EditWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import { sendTelegramMessage } from "../services/TelegramService/TelegramBotService";
@@ -97,8 +98,10 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { messageId } = req.params;
+  // ?scope=me → local delete only | ?scope=everyone (default) → delete on WhatsApp too
+  const scope = (req.query.scope as string) === "me" ? "me" : "everyone";
 
-  const message = await DeleteWhatsAppMessage(messageId);
+  const message = await DeleteWhatsAppMessage(messageId, scope);
 
   const io = getIO();
   io.to(message.ticketId.toString()).emit("appMessage", {
@@ -107,6 +110,28 @@ export const remove = async (
   });
 
   return res.send();
+};
+
+export const edit = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { messageId } = req.params;
+  const { body: newBody } = req.body;
+
+  if (!newBody || !newBody.trim()) {
+    return res.status(400).json({ error: "body is required" });
+  }
+
+  const message = await EditWhatsAppMessage(messageId, newBody.trim());
+
+  const io = getIO();
+  io.to(message.ticketId.toString()).emit("appMessage", {
+    action: "update",
+    message
+  });
+
+  return res.json(message);
 };
 
 // ─── Agent asks AI about a ticket ─────────────────────────────────────────────

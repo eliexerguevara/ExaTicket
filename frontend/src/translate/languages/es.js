@@ -532,9 +532,20 @@ const messages = {
       messageOptionsMenu: {
         delete: "Borrar",
         reply: "Responder",
+        edit: "Editar mensaje",
+        deleteForMe: "Eliminar para mí",
+        deleteForEveryone: "Eliminar para todos",
         confirmationModal: {
           title: "¿Borrar mensaje?",
           message: "Esta acción no puede ser revertida.",
+          deleteForMeMessage: "El mensaje desaparecerá de tu vista. El cliente aún lo verá en su WhatsApp.",
+          deleteForEveryoneMessage: "El mensaje se eliminará para ambos lados. Esta acción no puede revertirse.",
+        },
+        editDialog: {
+          title: "Editar mensaje",
+          label: "Nuevo texto",
+          save: "Guardar",
+          cancel: "Cancelar",
         },
       },
       backendErrors: {

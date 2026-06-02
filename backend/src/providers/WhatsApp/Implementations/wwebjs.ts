@@ -432,12 +432,21 @@ const deleteMessage = async (
   fromMe: boolean
 ): Promise<void> => {
   const wbot = getWbot(sessionId);
-
   const serializedMsgId = getSerializedMessageId(chatId, fromMe, messageId);
-
   const message = await wbot.getMessageById(serializedMsgId);
-
   await message.delete(true);
+};
+
+const editMessage = async (
+  sessionId: number,
+  chatId: string,
+  messageId: string,
+  newBody: string
+): Promise<void> => {
+  const wbot = getWbot(sessionId);
+  const serializedMsgId = getSerializedMessageId(chatId, true, messageId);
+  const message = await wbot.getMessageById(serializedMsgId);
+  await (message as any).edit(newBody);
 };
 
 const init = async (whatsapp: Whatsapp): Promise<void> => {
@@ -627,6 +636,7 @@ export const WhatsappWebJsProvider: WhatsappProvider = {
   sendMessage,
   sendMedia,
   deleteMessage,
+  editMessage,
   checkNumber,
   getProfilePicUrl,
   getContacts,

@@ -55,6 +55,10 @@ class Message extends Model<Message> {
   @Column
   isInternal: boolean;
 
+  @Default(false)
+  @Column
+  isEdited: boolean;
+
   @CreatedAt
   @Column(DataType.DATE(6))
   createdAt: Date;

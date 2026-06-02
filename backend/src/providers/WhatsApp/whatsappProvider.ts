@@ -31,6 +31,12 @@ export interface WhatsappProvider {
     messageId: string,
     fromMe: boolean
   ): Promise<void>;
+  editMessage(
+    sessionId: number,
+    chatId: string,
+    messageId: string,
+    newBody: string
+  ): Promise<void>;
   checkNumber(sessionId: number, number: string): Promise<string>;
   getProfilePicUrl(sessionId: number, number: string): Promise<string>;
   getContacts(sessionId: number): Promise<ProviderContact[]>;

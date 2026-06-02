@@ -3,13 +3,9 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider } from "../../providers/WhatsApp";
 
-/**
- * scope = "me"       → mark deleted in DB only (client keeps the message on their phone)
- * scope = "everyone" → attempt to delete on WhatsApp for both parties, then mark deleted in DB
- */
-const DeleteWhatsAppMessage = async (
+const EditWhatsAppMessage = async (
   messageId: string,
-  scope: "me" | "everyone" = "everyone"
+  newBody: string
 ): Promise<Message> => {
   const message = await Message.findByPk(messageId, {
     include: [
@@ -25,25 +21,29 @@ const DeleteWhatsAppMessage = async (
     throw new AppError("No message found with this ID.");
   }
 
-  if (scope === "everyone" && message.ticket?.whatsappId) {
+  if (!message.fromMe) {
+    throw new AppError("Only your own messages can be edited.", 403);
+  }
+
+  const { ticket } = message;
+
+  if (ticket?.whatsappId) {
     try {
-      const { ticket } = message;
       const chatId = `${ticket.contact.number}@${ticket.isGroup ? "g" : "c"}.us`;
-      await whatsappProvider.deleteMessage(
+      await whatsappProvider.editMessage(
         ticket.whatsappId,
         chatId,
         message.id,
-        message.fromMe
+        newBody
       );
     } catch (_err) {
-      // WhatsApp API may fail for old messages, broadcast synthetic IDs, or
-      // messages outside the deletion window. Fall through — still mark deleted locally.
+      // WhatsApp edit may fail for old messages. Update DB regardless.
     }
   }
 
-  await message.update({ isDeleted: true });
+  await message.update({ body: newBody, isEdited: true });
 
   return message;
 };
 
-export default DeleteWhatsAppMessage;
+export default EditWhatsAppMessage;

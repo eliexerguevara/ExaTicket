@@ -19,6 +19,7 @@ messageRoutes.post(
 );
 
 messageRoutes.delete("/messages/:messageId", isAuth, MessageController.remove);
+messageRoutes.patch("/messages/:messageId", isAuth, MessageController.edit);
 
 // Agent asks AI for advice about a ticket (creates internal note)
 messageRoutes.post(
