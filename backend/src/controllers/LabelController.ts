@@ -193,35 +193,39 @@ export const broadcast = async (
 
     try {
       if (ticket.whatsappId) {
-        // WhatsApp broadcast
+        // WhatsApp broadcast — the WhatsApp message_create event handler
+        // (handleWhatsappEvents) already listens for outgoing messages and
+        // calls CreateMessageService automatically. Do NOT call it here too,
+        // or the message will be saved (and delivered to the client) twice.
         await whatsappProvider.sendMessage(
           ticket.whatsappId,
           `${contactNumber}@c.us`,
           message
         );
       } else if (ticket.telegramId) {
-        // Telegram broadcast — contactNumber IS the Telegram chat ID
+        // Telegram broadcast — contactNumber IS the Telegram chat ID.
+        // No outgoing-message listener on the Telegram side, so we must
+        // save the message manually so agents can see it in the ticket.
         const bot = getBotInstance(ticket.telegramId);
         if (!bot) {
           errors.push(`ticket ${ticket.id}: Telegram bot not available (id=${ticket.telegramId})`);
           continue;
         }
         await (bot as any).sendMessage(Number(contactNumber), message, { parse_mode: "Markdown" });
-      }
 
-      // Save the broadcast message in the ticket so agents can see it
-      const msgId = `broadcast-${ticket.id}-${Date.now()}`;
-      await CreateMessageService({
-        messageData: {
-          id: msgId,
-          ticketId: ticket.id,
-          body: message,
-          fromMe: true,
-          read: true,
-          isInternal: false,
-          ack: 2
-        }
-      });
+        const msgId = `broadcast-${ticket.id}-${Date.now()}`;
+        await CreateMessageService({
+          messageData: {
+            id: msgId,
+            ticketId: ticket.id,
+            body: message,
+            fromMe: true,
+            read: true,
+            isInternal: false,
+            ack: 2
+          }
+        });
+      }
 
       sent++;
 
