@@ -67,6 +67,8 @@ docker exec exaticket-backend-1 npx sequelize db:seed:all
 - **Verificación de cliente antes de soporte** — la IA comprueba si el número o nombre está registrado en Splynx antes de abrir una sesión de soporte técnico; si no está en el sistema solicita nombre o teléfono de contrato y cierra el ticket si no se puede verificar
 - **Integración Splynx ISP Billing** — la IA consulta estado de servicios, historial de tickets y cortes generales antes de responder
 - **Pestaña Grupos** — visualización dedicada para conversaciones de grupos de WhatsApp
+- **Sistema de etiquetas** — asigna etiquetas de colores a tickets; los cambios se propagan en tiempo real por WebSocket a todas las vistas abiertas
+- **Mensaje masivo por etiqueta** — envía un mensaje a todos los tickets abiertos/pendientes con una etiqueta determinada, soporta WhatsApp y Telegram simultáneamente, con opción de resolver los chats automáticamente
 - Escalado automático al operador humano (por solicitud del usuario, decisión de la IA o límite de intentos)
 - Creación y gestión de tickets desde el navegador
 - Envío y recepción de mensajes, imágenes, audio y documentos
@@ -824,6 +826,7 @@ ExaTicket/
 │   ├── src/
 │   │   ├── config/auth.ts                # JWT secrets requeridos (no hardcoded)
 │   │   ├── controllers/
+│   │   │   ├── LabelController.ts        # CRUD etiquetas + addToTicket/removeFromTicket + broadcast WA+TG
 │   │   │   ├── MessageController.ts      # +agentAsk: consulta agente→IA
 │   │   │   ├── SplynxController.ts       # POST /splynx/test-connection
 │   │   │   ├── TelegramController.ts     # CRUD + connect/disconnect bots Telegram
@@ -871,7 +874,8 @@ ExaTicket/
 │   │   │   ├── MessagesList/             # Renderizado de notas internas IA (fondo ámbar)
 │   │   │   ├── MessageInput/             # Botón 🤖 + panel consulta agente→IA
 │   │   │   ├── TicketActionButtons/      # Botón "Tomar control" IA
-│   │   │   ├── TicketListItem/           # Badge canal (WA verde / TG azul) + badge IA
+│   │   │   ├── TicketLabels/             # Chips de etiquetas en vista de ticket (add/remove en tiempo real)
+│   │   │   ├── TicketListItem/           # Badge canal (WA verde / TG azul) + badge IA + chips etiquetas
 │   │   │   └── TicketsManager/           # Pestañas: Bandeja · Resueltos · Buscar · Grupos
 │   │   ├── hooks/
 │   │   │   └── useTickets/               # +isGroup param → API
@@ -896,6 +900,51 @@ ExaTicket/
 ---
 
 ## Historial de cambios
+
+### v2.0.0 — 2026-06-02
+
+#### Sistema de etiquetas — corrección multicapa completa
+
+Las etiquetas desaparecían de la vista de detalle del ticket por una cadena de seis bugs independientes. Todos corregidos:
+
+| # | Dónde | Bug | Fix |
+|---|-------|-----|-----|
+| 1 | `UpdateTicketService` | `ticket.reload()` no recarga asociaciones en Sequelize | Reemplazado con `ShowTicketService` (carga completa: user, queue, labels, contact) |
+| 2 | `LabelController.addToTicket / removeFromTicket` | El evento socket llevaba ticket sin etiquetas | Usa `ShowTicketService` en lugar de `Ticket.findByPk` parcial |
+| 3 | `handleWhatsappEvents.autoApplyLabel` | Emitía ticket sin usuario/cola (solo labels) | Reemplazado con `ShowTicketService` |
+| 4 | `handleWhatsappEvents.escalateToHuman` | Emitía un segundo evento socket con ticket raw tras `autoApplyLabel`, sobreescribiendo el correcto | Eliminado el emit redundante |
+| 5 | `TelegramBotService.autoApplyLabel` | Mismo bug que #3 en el canal Telegram | Reemplazado con `ShowTicketService` |
+| 6 | `TelegramBotService.escalateToHuman` | Mismo bug que #4 en el canal Telegram | Eliminado el emit redundante |
+| 7 | `TicketLabels/index.js` (frontend) | `handleAdd`/`handleRemove` ignoraban la respuesta del POST/DELETE y disparaban un GET separado (race condition) | Ahora usa la respuesta de la API directamente como nuevo estado del ticket |
+| 8 | `LabelController.update` | Renombrar o cambiar color de una etiqueta no actualizaba las vistas abiertas | Ahora emite socket update a todos los tickets que tienen esa etiqueta |
+| 9 | `LabelController.remove` | Borrar una etiqueta no la quitaba visualmente de los tickets abiertos | Recopila ticketIds afectados antes de destruir y emite socket update a cada uno |
+| 10 | `LabelController.addToTicket / removeFromTicket` | Sin try/catch — errores causaban unhandled rejection sin respuesta HTTP | Envueltos en try/catch con respuesta 500 y log estructurado |
+
+#### Routing IA — asignación correcta de cola al nombrar departamento
+
+- **Bug:** `HUMAN_REQUEST_KEYWORDS` verificaba *antes* que la fase de routing. Si el cliente decía `"quiero hablar con ventas"`, coincidía con `"quiero hablar con"` y siempre enviaba a la cola **Soporte** sin importar el departamento mencionado.
+- **Fix:** Cuando se detecta una frase de solicitud de humano, se comprueba si el mensaje también nombra un departamento específico (ventas / administración). Si lo hace, se enruta directamente a esa cola en lugar de escalar a Soporte.
+- Aplica tanto en WhatsApp (`handleWhatsappEvents.ts`) como en Telegram (`TelegramBotService.ts`).
+
+```
+"quiero hablar con ventas"
+       ↓ HUMAN_REQUEST_KEYWORDS = true
+       ↓ parseRoutingChoice → "ventas"
+       ↓ findQueueByName("enta") → cola "Ventas"
+       → Asigna a Ventas + "Un momento, te conectamos con Ventas. 🙏"
+```
+
+#### Broadcast masivo — soporte Telegram
+
+- **Bug 1:** `TicketLabel.findAll({ include: [Ticket] })` fallaba con 500 porque `TicketLabel` no tiene decoradores `@BelongsTo` — Sequelize no tenía la asociación registrada.
+- **Fix Bug 1:** Reescrito con dos queries: primero obtiene `ticketIds` de `TicketLabel`, luego consulta `Ticket.findAll({ where: { id: IN ticketIds } })`.
+- **Bug 2:** El broadcast usaba `whatsappProvider.sendMessage` para todos los tickets. Los tickets de Telegram (`telegramId` presente, `whatsappId` ausente) eran ignorados silenciosamente.
+- **Fix Bug 2:** El broadcast ahora detecta el canal de cada ticket:
+  - `ticket.whatsappId` → `whatsappProvider.sendMessage(...@c.us)`
+  - `ticket.telegramId` → `getBotInstance(telegramId).sendMessage(contact.number, msg)` (el `contact.number` de Telegram IS el chat ID)
+  - En ambos casos guarda el mensaje en el ticket y respeta la opción "Resolver chats automáticamente"
+
+---
 
 ### v1.9.2 — 2026-05-28
 
