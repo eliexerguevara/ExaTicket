@@ -19,7 +19,6 @@ import ClearIcon from "@material-ui/icons/Clear";
 import MicIcon from "@material-ui/icons/Mic";
 import CheckCircleOutlineIcon from "@material-ui/icons/CheckCircleOutline";
 import HighlightOffIcon from "@material-ui/icons/HighlightOff";
-import { Android } from "@material-ui/icons";
 import {
   FormControlLabel,
   Hidden,
@@ -27,7 +26,6 @@ import {
   MenuItem,
   Switch,
   Tooltip,
-  Collapse,
   InputBase as MuiInputBase,
 } from "@material-ui/core";
 import ClickAwayListener from "@material-ui/core/ClickAwayListener";
@@ -39,6 +37,7 @@ import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessa
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import toastError from "../../errors/toastError";
+import { toast } from "react-toastify";
 
 let Mp3Recorder = null;
 
@@ -218,34 +217,6 @@ const useStyles = makeStyles(theme => ({
     },
   },
 
-  // ── AI question panel ────────────────────────────────────────────────────
-  aiPanel: {
-    display: "flex",
-    alignItems: "center",
-    width: "100%",
-    padding: "6px 12px",
-    backgroundColor: theme.palette.type === "dark" ? "#1a1625" : "#f5f3ff",
-    borderTop: theme.palette.type === "dark" ? "1px solid #2d2440" : "1px solid #ddd6fe",
-    gap: 6,
-  },
-
-  aiPanelInput: {
-    flex: 1,
-    background: theme.palette.type === "dark" ? "#2a3942" : "#fff",
-    border: theme.palette.type === "dark" ? "1px solid #4c3d8f" : "1px solid #c4b5fd",
-    borderRadius: 16,
-    padding: "4px 12px",
-    fontSize: "0.85em",
-    color: theme.palette.type === "dark" ? "#e9edef" : "inherit",
-  },
-
-  aiSendBtn: {
-    color: "#7c3aed",
-  },
-
-  aiIconActive: {
-    color: "#7c3aed",
-  },
 }));
 
 const MessageInput = ({ ticketStatus }) => {
@@ -266,12 +237,6 @@ const MessageInput = ({ ticketStatus }) => {
   const { user } = useContext(AuthContext);
 
   const [signMessage, setSignMessage] = useLocalStorage("signOption", true);
-
-  // AI question panel state
-  const [showAIPanel, setShowAIPanel] = useState(false);
-  const [aiQuestion, setAIQuestion] = useState("");
-  const [aiLoading, setAILoading] = useState(false);
-  const aiInputRef = useRef();
 
   useEffect(() => {
     inputRef.current.focus();
@@ -367,18 +332,25 @@ const MessageInput = ({ ticketStatus }) => {
     setLoading(true);
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error(i18n.t("messageInput.microphoneNotAvailable"));
+        toast.error(i18n.t("messageInput.microphoneNotAvailable"));
+        setLoading(false);
+        return;
       }
       const recorder = await initRecorder();
       if (!recorder) {
-        throw new Error(i18n.t("messageInput.microphoneNotAvailable"));
+        toast.error(i18n.t("messageInput.microphoneNotAvailable"));
+        setLoading(false);
+        return;
       }
       await navigator.mediaDevices.getUserMedia({ audio: true });
       await recorder.start();
       setRecording(true);
       setLoading(false);
     } catch (err) {
-      toastError(err);
+      // Show actual browser error (e.g. NotAllowedError, NotFoundError)
+      const msg = err.response?.data?.message || err.response?.data?.error
+        || err.message || "An error occurred!";
+      toast.error(msg);
       setLoading(false);
     }
   };
@@ -441,28 +413,6 @@ const MessageInput = ({ ticketStatus }) => {
       setRecording(false);
     } catch (err) {
       toastError(err);
-    }
-  };
-
-  const handleToggleAIPanel = () => {
-    setShowAIPanel(prev => {
-      if (!prev) setTimeout(() => aiInputRef.current && aiInputRef.current.focus(), 80);
-      return !prev;
-    });
-    setAIQuestion("");
-  };
-
-  const handleAIQuestion = async () => {
-    if (!aiQuestion.trim()) return;
-    setAILoading(true);
-    try {
-      await api.post(`/messages/${ticketId}/agent-ai`, { question: aiQuestion.trim() });
-      setAIQuestion("");
-      setShowAIPanel(false);
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setAILoading(false);
     }
   };
 
@@ -540,52 +490,8 @@ const MessageInput = ({ ticketStatus }) => {
       <Paper square elevation={0} className={classes.mainWrapper}>
         {replyingMessage && renderReplyingMessage(replyingMessage)}
 
-        {/* AI Question Panel */}
-        <Collapse in={showAIPanel} style={{ width: "100%" }}>
-          <div className={classes.aiPanel}>
-            <Android style={{ fontSize: 18, color: "#7c3aed", flexShrink: 0 }} />
-            <InputBase
-              inputRef={aiInputRef}
-              className={classes.aiPanelInput}
-              placeholder="Pregunta a la IA sobre este caso..."
-              value={aiQuestion}
-              onChange={e => setAIQuestion(e.target.value)}
-              disabled={aiLoading}
-              onKeyPress={e => {
-                if (e.key === "Enter" && !e.shiftKey) handleAIQuestion();
-              }}
-              fullWidth
-            />
-            <IconButton
-              size="small"
-              disabled={aiLoading || !aiQuestion.trim()}
-              onClick={handleAIQuestion}
-              className={classes.aiSendBtn}
-            >
-              {aiLoading
-                ? <CircularProgress size={18} style={{ color: "#7c3aed" }} />
-                : <SendIcon fontSize="small" />}
-            </IconButton>
-            <IconButton size="small" onClick={handleToggleAIPanel}>
-              <ClearIcon fontSize="small" />
-            </IconButton>
-          </div>
-        </Collapse>
-
         <div className={classes.newMessageBox}>
           <Hidden only={["sm", "xs"]}>
-            <Tooltip title="Consultar a la IA">
-              <span>
-                <IconButton
-                  aria-label="askAI"
-                  component="span"
-                  disabled={loading || recording || ticketStatus !== "open"}
-                  onClick={handleToggleAIPanel}
-                >
-                  <Android className={showAIPanel ? classes.aiIconActive : classes.sendMessageIcons} />
-                </IconButton>
-              </span>
-            </Tooltip>
             <IconButton
               aria-label="emojiPicker"
               component="span"
