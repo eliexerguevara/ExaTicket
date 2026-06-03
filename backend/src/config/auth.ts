@@ -6,7 +6,7 @@ const requireEnv = (key: string): string => {
 
 export default {
   secret: requireEnv("JWT_SECRET"),
-  expiresIn: "15m",
+  expiresIn: "8h",
   refreshSecret: requireEnv("JWT_REFRESH_SECRET"),
   refreshExpiresIn: "7d"
 };
