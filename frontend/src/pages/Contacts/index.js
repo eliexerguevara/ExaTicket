@@ -20,6 +20,8 @@ import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
+import Switch from "@material-ui/core/Switch";
+import Tooltip from "@material-ui/core/Tooltip";
 
 import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
@@ -194,6 +196,14 @@ const Contacts = () => {
     setPageNumber(1);
   };
 
+  const handleToggleAI = async (contactId) => {
+    try {
+      await api.put(`/contacts/${contactId}/toggleAI`);
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
   const handleimportContact = async () => {
     try {
       await api.post("/contacts/import");
@@ -291,6 +301,7 @@ const Contacts = () => {
               <TableCell align="center">
                 {i18n.t("contacts.table.email")}
               </TableCell>
+              <TableCell align="center">IA</TableCell>
               <TableCell align="center">
                 {i18n.t("contacts.table.actions")}
               </TableCell>
@@ -306,6 +317,16 @@ const Contacts = () => {
                   <TableCell>{contact.name}</TableCell>
                   <TableCell align="center">{contact.number}</TableCell>
                   <TableCell align="center">{contact.email}</TableCell>
+                  <TableCell align="center">
+                    <Tooltip title={contact.aiDisabled ? "IA desactivada para este contacto" : "IA activa para este contacto"}>
+                      <Switch
+                        size="small"
+                        checked={!contact.aiDisabled}
+                        onChange={() => handleToggleAI(contact.id)}
+                        color="primary"
+                      />
+                    </Tooltip>
+                  </TableCell>
                   <TableCell align="center">
                     <IconButton
                       size="small"

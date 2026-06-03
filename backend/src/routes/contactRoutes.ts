@@ -22,6 +22,8 @@ contactRoutes.post("/contact", isAuth, ContactController.getContact);
 
 contactRoutes.put("/contacts/:contactId", isAuth, ContactController.update);
 
+contactRoutes.put("/contacts/:contactId/toggleAI", isAuth, ContactController.toggleAI);
+
 contactRoutes.delete("/contacts/:contactId", isAuth, ContactController.remove);
 
 export default contactRoutes;
