@@ -7,7 +7,7 @@ import Ticket from "../../models/Ticket";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import ShowTicketService from "./ShowTicketService";
-import { getTicketSummary } from "../AIServices/GetAIResponse";
+import { getTicketSummary, getTicketImages } from "../AIServices/GetAIResponse";
 
 interface TicketData {
   status?: string;
@@ -70,7 +70,10 @@ const UpdateTicketService = async ({
         try {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const { createSplynxTicket } = require("../SplynxService/SplynxService");
-          const summaryResult = await getTicketSummary(Number(ticketId));
+          const [summaryResult, images] = await Promise.all([
+            getTicketSummary(Number(ticketId)),
+            getTicketImages(Number(ticketId))
+          ]);
           const summary = summaryResult?.summary ?? null;
           const dateStr = new Date().toLocaleDateString("es", {
             day: "2-digit",
@@ -78,9 +81,16 @@ const UpdateTicketService = async ({
             year: "numeric"
           });
           const subject = `Soporte WhatsApp ${dateStr}`;
-          const body = summary
+          let body = summary
             ? `Caso cerrado por agente.\n\nResumen:\n${summary}`
             : "Caso cerrado por agente.";
+          const clientImages = images.filter((img: any) => !img.fromMe);
+          if (clientImages.length > 0) {
+            body += `\n\nImágenes enviadas por el cliente (${clientImages.length}):`;
+            clientImages.forEach((img: any, i: number) => {
+              body += `\n• Imagen ${i + 1}: ${img.url}`;
+            });
+          }
           const result = await createSplynxTicket(ticket.splynxCustomerId, subject, body, "low", "closed");
           if (result?.id) {
             logger.info(

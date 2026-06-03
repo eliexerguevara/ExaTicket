@@ -8,6 +8,12 @@ export interface AIResponse {
   shouldResolve: boolean;
 }
 
+export interface TicketImageResult {
+  url: string;
+  fromMe: boolean;
+  createdAt: Date;
+}
+
 const ESCALATION_MARKER = "[ESCALAR]";
 const RESUELTO_MARKER = "[RESUELTO]";
 
@@ -260,5 +266,39 @@ export const getTicketSummary = async (
   } catch (err) {
     logger.error(err, "Error generating ticket summary");
     return null;
+  }
+};
+
+/**
+ * Returns all image messages sent in a ticket during the last 12 hours.
+ * Includes images from both the client (fromMe=false) and the agent/bot (fromMe=true).
+ */
+export const getTicketImages = async (
+  ticketId: number
+): Promise<TicketImageResult[]> => {
+  try {
+    const { Op } = require("sequelize");
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+
+    const messages = await Message.findAll({
+      where: {
+        ticketId,
+        createdAt: { [Op.gte]: twelveHoursAgo },
+        mediaType: { [Op.like]: "image/%" }
+      },
+      order: [["createdAt", "ASC"]],
+      limit: 20
+    });
+
+    return messages
+      .filter((m: any) => m.mediaUrl && !m.isDeleted)
+      .map((m: any) => ({
+        url: m.mediaUrl,   // uses the model getter → full http://host:port/public/file.ext
+        fromMe: m.fromMe,
+        createdAt: m.createdAt
+      }));
+  } catch (err) {
+    logger.error(err, "Error fetching ticket images");
+    return [];
   }
 };

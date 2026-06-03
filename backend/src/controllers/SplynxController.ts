@@ -4,7 +4,7 @@ import {
   findCustomersByName,
   createSplynxTicket
 } from "../services/SplynxService/SplynxService";
-import { getTicketSummary } from "../services/AIServices/GetAIResponse";
+import { getTicketSummary, getTicketImages } from "../services/AIServices/GetAIResponse";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import { logger } from "../utils/logger";
 
@@ -77,8 +77,11 @@ export const documentTicket = async (
   }
 
   try {
-    // 1. AI summary (last 12 hours only)
-    const summaryResult = await getTicketSummary(ticketId);
+    // 1. AI summary + client images (last 12 hours) in parallel
+    const [summaryResult, images] = await Promise.all([
+      getTicketSummary(ticketId),
+      getTicketImages(ticketId)
+    ]);
     const summary = summaryResult?.summary ?? null;
     const reportTime = summaryResult?.reportTime ?? null;
 
@@ -92,9 +95,18 @@ export const documentTicket = async (
     const subject = `Soporte ${dateStr} ${timeStr}`;
 
     const reportLine = reportTime ? `\nHora de reporte: ${reportTime}` : "";
-    const message = summary
+    let message = summary
       ? `Caso resuelto vía ExaTicket.${reportLine}\n\nResumen:\n${summary}`
       : `Caso resuelto vía ExaTicket.${reportLine}`;
+
+    // Append images sent by the client
+    const clientImages = images.filter(img => !img.fromMe);
+    if (clientImages.length > 0) {
+      message += `\n\nImágenes enviadas por el cliente (${clientImages.length}):`;
+      clientImages.forEach((img, i) => {
+        message += `\n• Imagen ${i + 1}: ${img.url}`;
+      });
+    }
 
     // 2. Create Splynx ticket via bridge
     const splynxResult = await createSplynxTicket(

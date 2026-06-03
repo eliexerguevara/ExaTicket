@@ -26,7 +26,7 @@ import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import CreateContactService from "../services/ContactServices/CreateContactService";
-import { getAIResponse, getTicketSummary } from "../services/AIServices/GetAIResponse";
+import { getAIResponse, getTicketSummary, getTicketImages } from "../services/AIServices/GetAIResponse";
 import CheckSettings from "../helpers/CheckSettings";
 
 /** Lazy-load Splynx so the backend doesn't crash if the module isn't compiled yet.
@@ -68,20 +68,42 @@ const createSplynxResolutionTicket = async (
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createSplynxTicket } = require("../services/SplynxService/SplynxService");
-    const summary = await getTicketSummary(ticketId);
+
+    // Fetch AI summary and client images in parallel
+    const [summaryResult, images] = await Promise.all([
+      getTicketSummary(ticketId),
+      getTicketImages(ticketId)
+    ]);
+    const summary = summaryResult?.summary ?? null;
+    const reportLine = summaryResult?.reportTime
+      ? `\nHora de reporte: ${summaryResult.reportTime}`
+      : "";
+
     const dateStr = new Date().toLocaleDateString("es", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric"
     });
     const subject = `Soporte WhatsApp ${dateStr}`;
-    const body = summary
-      ? `Caso resuelto vía soporte WhatsApp.\n\nResumen:\n${summary}`
-      : "Caso resuelto vía soporte WhatsApp.";
+
+    let body = summary
+      ? `Caso resuelto vía soporte WhatsApp.${reportLine}\n\nResumen:\n${summary}`
+      : `Caso resuelto vía soporte WhatsApp.${reportLine}`;
+
+    // Append images sent by the client
+    const clientImages = images.filter(img => !img.fromMe);
+    if (clientImages.length > 0) {
+      body += `\n\nImágenes enviadas por el cliente (${clientImages.length}):`;
+      clientImages.forEach((img, i) => {
+        body += `\n• Imagen ${i + 1}: ${img.url}`;
+      });
+    }
+
     const result = await createSplynxTicket(customerId, subject, body, "low", "closed");
     if (result?.id) {
       logger.info(
-        `Splynx resolution ticket created (id=${result.id}) for customer ${customerId} (exaticket ${ticketId})`
+        `Splynx resolution ticket created (id=${result.id}) for customer ${customerId} (exaticket ${ticketId})` +
+        (clientImages.length > 0 ? ` [${clientImages.length} imagen(es) adjunta(s)]` : "")
       );
     } else {
       logger.warn(
