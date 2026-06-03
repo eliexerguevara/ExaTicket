@@ -93,6 +93,35 @@ const createSplynxResolutionTicket = async (
   }
 };
 
+/**
+ * When the global AI is disabled, keyword-based case resolution still needs
+ * to be detected so Splynx gets documented automatically.
+ * This runs instead of handleAISupport when aiIsActive === false.
+ * It does NOT send automatic messages and does NOT close the ticket —
+ * both remain the agent's responsibility.
+ */
+const handleDocumentationWhenAIOff = async (
+  ticket: Ticket,
+  messageBody: string,
+  contactNumber: string
+): Promise<void> => {
+  if (!clientConfirmsResolution(messageBody)) return;
+  try {
+    const splynxInfo = await getSplynxInfo(contactNumber, false);
+    if (!splynxInfo.customerId && ticket.splynxCustomerId) {
+      splynxInfo.customerId = ticket.splynxCustomerId;
+    }
+    if (splynxInfo.customerId) {
+      await createSplynxResolutionTicket(splynxInfo.customerId, ticket.id);
+      logger.info(
+        `handleDocumentationWhenAIOff: Splynx documented for ticket ${ticket.id} (AI off, keyword resolution detected)`
+      );
+    }
+  } catch (err) {
+    logger.error(err, `handleDocumentationWhenAIOff: error for ticket ${ticket.id}`);
+  }
+};
+
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
 import { MessageType, MessageAck } from "../providers/WhatsApp/types";
 
@@ -853,6 +882,13 @@ export const handleMessage = async (
             ticket,
             messagePayload.body,
             contextPayload.whatsappId,
+            contactPayload.number
+          );
+        } else {
+          // AI is globally off — still detect resolution keywords and document in Splynx
+          await handleDocumentationWhenAIOff(
+            ticket,
+            messagePayload.body,
             contactPayload.number
           );
         }

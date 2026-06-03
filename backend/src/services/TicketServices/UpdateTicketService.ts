@@ -1,10 +1,13 @@
 import CheckContactOpenTickets from "../../helpers/CheckContactOpenTickets";
+import CheckSettings from "../../helpers/CheckSettings";
 import SetTicketMessagesAsRead from "../../helpers/SetTicketMessagesAsRead";
 import { getIO } from "../../libs/socket";
+import { logger } from "../../utils/logger";
 import Ticket from "../../models/Ticket";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import ShowTicketService from "./ShowTicketService";
+import { getTicketSummary } from "../AIServices/GetAIResponse";
 
 interface TicketData {
   status?: string;
@@ -56,6 +59,39 @@ const UpdateTicketService = async ({
     await ticket.update({
       whatsappId
     });
+  }
+
+  // When an agent manually closes a ticket and AI is globally disabled,
+  // document the case in Splynx automatically (fire-and-forget, non-blocking).
+  if (status === "closed" && oldStatus !== "closed" && ticket.splynxCustomerId) {
+    const aiEnabled = await CheckSettings("aiEnabled").catch(() => "disabled");
+    if (aiEnabled !== "enabled") {
+      setImmediate(async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { createSplynxTicket } = require("../SplynxService/SplynxService");
+          const summaryResult = await getTicketSummary(Number(ticketId));
+          const summary = summaryResult?.summary ?? null;
+          const dateStr = new Date().toLocaleDateString("es", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+          });
+          const subject = `Soporte WhatsApp ${dateStr}`;
+          const body = summary
+            ? `Caso cerrado por agente.\n\nResumen:\n${summary}`
+            : "Caso cerrado por agente.";
+          const result = await createSplynxTicket(ticket.splynxCustomerId, subject, body, "low", "closed");
+          if (result?.id) {
+            logger.info(
+              `UpdateTicketService: Splynx ticket created (id=${result.id}) on manual close of ticket ${ticketId}`
+            );
+          }
+        } catch (err) {
+          logger.error(err, `UpdateTicketService: error creating Splynx ticket on manual close of ticket ${ticketId}`);
+        }
+      });
+    }
   }
 
   // Re-fetch with all associations (labels, contact, queue, user…) so the
