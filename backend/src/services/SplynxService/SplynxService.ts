@@ -464,6 +464,48 @@ export const createSplynxTicket = async (
   }
 };
 
+/**
+ * Upload image files as attachments to an existing Splynx ticket.
+ * Uses the Splynx REST API v2 with multipart/form-data.
+ * Failures are non-fatal — errors are logged as warnings.
+ */
+export const addSplynxTicketAttachments = async (
+  splynxTicketId: number,
+  attachments: Array<{ filename: string; buffer: Buffer; mimeType: string }>
+): Promise<void> => {
+  if (attachments.length === 0) return;
+  try {
+    const client = await buildClient();
+    if (!client) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const FormData = require("form-data");
+
+    for (const { filename, buffer, mimeType } of attachments) {
+      try {
+        const form = new FormData();
+        form.append("ticket_id", String(splynxTicketId));
+        form.append("file", buffer, { filename, contentType: mimeType });
+
+        await client.post("/admin/support/ticket-attachments", form, {
+          headers: form.getHeaders(),
+          timeout: 20000
+        });
+        logger.info(
+          `Splynx: attachment uploaded ticket=${splynxTicketId} file=${filename}`
+        );
+      } catch (e: any) {
+        logger.warn(
+          { msg: e?.message, status: e?.response?.status, data: e?.response?.data },
+          `Splynx: failed to upload attachment ${filename} for ticket ${splynxTicketId}`
+        );
+      }
+    }
+  } catch (err) {
+    logger.warn(err, `addSplynxTicketAttachments: setup error for ticket ${splynxTicketId}`);
+  }
+};
+
 // ─── Context builder for AI ───────────────────────────────────────────────────
 
 /** Structured result from buildSplynxContext */

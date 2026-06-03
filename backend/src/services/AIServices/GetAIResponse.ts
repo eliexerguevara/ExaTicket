@@ -10,6 +10,8 @@ export interface AIResponse {
 
 export interface TicketImageResult {
   url: string;
+  filename: string;  // raw filename stored in DB (e.g., "abc12.jpeg")
+  mimeType: string;  // derived MIME type (e.g., "image/jpeg")
   fromMe: boolean;
   createdAt: Date;
 }
@@ -280,23 +282,36 @@ export const getTicketImages = async (
     const { Op } = require("sequelize");
     const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
 
+    // The DB stores mediaType as "image" (WhatsApp) or "image/jpeg" (other sources).
+    // Use Op.like "image%" to match both variants.
     const messages = await Message.findAll({
       where: {
         ticketId,
         createdAt: { [Op.gte]: twelveHoursAgo },
-        mediaType: { [Op.like]: "image/%" }
+        mediaType: { [Op.like]: "image%" }
       },
       order: [["createdAt", "ASC"]],
       limit: 20
     });
 
     return messages
-      .filter((m: any) => m.mediaUrl && !m.isDeleted)
-      .map((m: any) => ({
-        url: m.mediaUrl,   // uses the model getter → full http://host:port/public/file.ext
-        fromMe: m.fromMe,
-        createdAt: m.createdAt
-      }));
+      .filter((m: any) => m.getDataValue("mediaUrl") && !m.isDeleted)
+      .map((m: any) => {
+        const rawFilename: string = m.getDataValue("mediaUrl");
+        const ext = rawFilename.split(".").pop()?.toLowerCase() || "jpeg";
+        const mimeMap: Record<string, string> = {
+          jpg: "image/jpeg", jpeg: "image/jpeg",
+          png: "image/png", gif: "image/gif",
+          webp: "image/webp", heic: "image/heic"
+        };
+        return {
+          url: m.mediaUrl,           // full URL via model getter
+          filename: rawFilename,     // raw filename for filesystem access
+          mimeType: mimeMap[ext] || "image/jpeg",
+          fromMe: m.fromMe,
+          createdAt: m.createdAt
+        };
+      });
   } catch (err) {
     logger.error(err, "Error fetching ticket images");
     return [];

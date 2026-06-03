@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import {
   testConnection as splynxTestConnection,
   findCustomersByName,
-  createSplynxTicket
+  createSplynxTicket,
+  addSplynxTicketAttachments
 } from "../services/SplynxService/SplynxService";
 import { getTicketSummary, getTicketImages } from "../services/AIServices/GetAIResponse";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
@@ -95,18 +96,11 @@ export const documentTicket = async (
     const subject = `Soporte ${dateStr} ${timeStr}`;
 
     const reportLine = reportTime ? `\nHora de reporte: ${reportTime}` : "";
-    let message = summary
+    const message = summary
       ? `Caso resuelto vía ExaTicket.${reportLine}\n\nResumen:\n${summary}`
       : `Caso resuelto vía ExaTicket.${reportLine}`;
 
-    // Append images sent by the client
     const clientImages = images.filter(img => !img.fromMe);
-    if (clientImages.length > 0) {
-      message += `\n\nImágenes enviadas por el cliente (${clientImages.length}):`;
-      clientImages.forEach((img, i) => {
-        message += `\n• Imagen ${i + 1}: ${img.url}`;
-      });
-    }
 
     // 2. Create Splynx ticket via bridge
     const splynxResult = await createSplynxTicket(
@@ -118,7 +112,24 @@ export const documentTicket = async (
       return res.status(500).json({ error: "No se pudo crear el ticket en Splynx" });
     }
 
-    // 3. Close the ExaTicket
+    // 3. Upload client images as actual file attachments to Splynx
+    if (clientImages.length > 0) {
+      const { readFile } = require("fs").promises;
+      const { join } = require("path");
+      const publicDir = join(__dirname, "..", "..", "public");
+      const fileBuffers: Array<{ filename: string; buffer: Buffer; mimeType: string }> = [];
+      for (const img of clientImages) {
+        try {
+          const buffer = await readFile(join(publicDir, img.filename));
+          fileBuffers.push({ filename: img.filename, buffer, mimeType: img.mimeType });
+        } catch (e) {
+          logger.warn(e, `SplynxController: could not read file ${img.filename}`);
+        }
+      }
+      await addSplynxTicketAttachments(splynxResult.id, fileBuffers);
+    }
+
+    // 4. Close the ExaTicket
     await UpdateTicketService({ ticketData: { status: "closed" }, ticketId });
 
     logger.info(

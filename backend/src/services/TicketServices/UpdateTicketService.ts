@@ -69,7 +69,7 @@ const UpdateTicketService = async ({
       setImmediate(async () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const { createSplynxTicket } = require("../SplynxService/SplynxService");
+          const { createSplynxTicket, addSplynxTicketAttachments } = require("../SplynxService/SplynxService");
           const [summaryResult, images] = await Promise.all([
             getTicketSummary(Number(ticketId)),
             getTicketImages(Number(ticketId))
@@ -81,21 +81,33 @@ const UpdateTicketService = async ({
             year: "numeric"
           });
           const subject = `Soporte WhatsApp ${dateStr}`;
-          let body = summary
+          const body = summary
             ? `Caso cerrado por agente.\n\nResumen:\n${summary}`
             : "Caso cerrado por agente.";
           const clientImages = images.filter((img: any) => !img.fromMe);
-          if (clientImages.length > 0) {
-            body += `\n\nImágenes enviadas por el cliente (${clientImages.length}):`;
-            clientImages.forEach((img: any, i: number) => {
-              body += `\n• Imagen ${i + 1}: ${img.url}`;
-            });
-          }
           const result = await createSplynxTicket(ticket.splynxCustomerId, subject, body, "low", "closed");
           if (result?.id) {
             logger.info(
               `UpdateTicketService: Splynx ticket created (id=${result.id}) on manual close of ticket ${ticketId}`
             );
+            if (clientImages.length > 0) {
+              const { readFile } = require("fs").promises;
+              const { join } = require("path");
+              // __dirname at runtime = dist/services/TicketServices → ../../../public = dist/../../../public = /usr/src/app/public
+              const publicDir = join(__dirname, "..", "..", "..", "public");
+              const fileBuffers: Array<{ filename: string; buffer: Buffer; mimeType: string }> = [];
+              for (const img of clientImages) {
+                try {
+                  const buffer = await readFile(join(publicDir, img.filename));
+                  fileBuffers.push({ filename: img.filename, buffer, mimeType: img.mimeType });
+                } catch (e) {
+                  logger.warn(e, `UpdateTicketService: could not read file ${img.filename}`);
+                }
+              }
+              if (fileBuffers.length > 0) {
+                await addSplynxTicketAttachments(result.id, fileBuffers);
+              }
+            }
           }
         } catch (err) {
           logger.error(err, `UpdateTicketService: error creating Splynx ticket on manual close of ticket ${ticketId}`);

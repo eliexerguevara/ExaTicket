@@ -66,8 +66,11 @@ const createSplynxResolutionTicket = async (
   ticketId: number
 ): Promise<void> => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { createSplynxTicket } = require("../services/SplynxService/SplynxService");
+    const {
+      createSplynxTicket,
+      addSplynxTicketAttachments
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+    } = require("../services/SplynxService/SplynxService");
 
     // Fetch AI summary and client images in parallel
     const [summaryResult, images] = await Promise.all([
@@ -85,26 +88,37 @@ const createSplynxResolutionTicket = async (
       year: "numeric"
     });
     const subject = `Soporte WhatsApp ${dateStr}`;
+    const clientImages = images.filter(img => !img.fromMe);
 
-    let body = summary
+    const body = summary
       ? `Caso resuelto vía soporte WhatsApp.${reportLine}\n\nResumen:\n${summary}`
       : `Caso resuelto vía soporte WhatsApp.${reportLine}`;
-
-    // Append images sent by the client
-    const clientImages = images.filter(img => !img.fromMe);
-    if (clientImages.length > 0) {
-      body += `\n\nImágenes enviadas por el cliente (${clientImages.length}):`;
-      clientImages.forEach((img, i) => {
-        body += `\n• Imagen ${i + 1}: ${img.url}`;
-      });
-    }
 
     const result = await createSplynxTicket(customerId, subject, body, "low", "closed");
     if (result?.id) {
       logger.info(
-        `Splynx resolution ticket created (id=${result.id}) for customer ${customerId} (exaticket ${ticketId})` +
-        (clientImages.length > 0 ? ` [${clientImages.length} imagen(es) adjunta(s)]` : "")
+        `Splynx resolution ticket created (id=${result.id}) for customer ${customerId} (exaticket ${ticketId})`
       );
+
+      // Upload client images as actual file attachments
+      if (clientImages.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { readFile } = require("fs").promises;
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { join } = require("path");
+        const publicDir = join(__dirname, "..", "..", "public");
+        const fileBuffers: Array<{ filename: string; buffer: Buffer; mimeType: string }> = [];
+
+        for (const img of clientImages) {
+          try {
+            const buffer = await readFile(join(publicDir, img.filename));
+            fileBuffers.push({ filename: img.filename, buffer, mimeType: img.mimeType });
+          } catch (e) {
+            logger.warn(e, `createSplynxResolutionTicket: could not read file ${img.filename}`);
+          }
+        }
+        await addSplynxTicketAttachments(result.id, fileBuffers);
+      }
     } else {
       logger.warn(
         `Splynx: createSplynxResolutionTicket returned null for customer ${customerId} (exaticket ${ticketId})`
