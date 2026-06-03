@@ -16,6 +16,19 @@ export function getHoursCloseTicketsAuto() {
 }
 
 /**
+ * Returns the base server URL for socket.io connections.
+ * Socket.io-client v3 treats any path in the URL as a namespace, so we must
+ * strip the /api suffix — socket.io uses the default namespace "/" and the
+ * nginx /socket.io/ location proxies it correctly to the backend.
+ */
+export function getSocketUrl() {
+  const backendUrl = getBackendUrl();
+  if (!backendUrl) return backendUrl;
+  // Strip trailing /api (or /api/) so socket.io connects to namespace "/"
+  return backendUrl.replace(/\/api\/?$/, "");
+}
+
+/**
  * Rewrites absolute HTTP media URLs (e.g. http://host:8080/public/file.jpg)
  * to go through the current origin's /api/ proxy when the page is on HTTPS.
  * This avoids mixed-content blocking on HTTPS pages.
