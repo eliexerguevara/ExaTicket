@@ -27,20 +27,22 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { email, password, name, profile, queueIds, whatsappId } = req.body;
+  const { email, password, name, queueIds, whatsappId } = req.body;
 
-  if (
-    req.url === "/signup" &&
-    (await CheckSettingsHelper("userCreation")) === "disabled"
-  ) {
+  const isSignup = req.url === "/signup";
+
+  if (isSignup && (await CheckSettingsHelper("userCreation")) === "disabled") {
     throw new AppError("ERR_USER_CREATION_DISABLED", 403);
   } else if (
-    req.url !== "/signup" &&
+    !isSignup &&
     req.user.profile !== "admin" &&
     req.user.profile !== "superadmin"
   ) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
+
+  // Never trust the client-supplied profile on public signup
+  const profile = isSignup ? "user" : (req.body.profile ?? "user");
 
   const user = await CreateUserService({
     email,
