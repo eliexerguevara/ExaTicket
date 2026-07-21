@@ -15,13 +15,17 @@ _addSslConfig() {
     FILE_SSL_CONF=/etc/nginx/conf.d/00-ssl-redirect.conf;
 
     if [ -f ${SSL_CERTIFICATE} ] && [ -f ${SSL_CERTIFICATE_KEY} ]; then
-        echo "saving ssl config in ${FILE_CONF}"
-        echo 'include include.d/ssl-redirect.conf;' >> ${FILE_SSL_CONF};
-        echo 'include "include.d/ssl.conf";' >> ${FILE_CONF};
-        echo "ssl_certificate ${SSL_CERTIFICATE};" >> ${FILE_CONF};
-        echo "ssl_certificate_key ${SSL_CERTIFICATE_KEY};" >> ${FILE_CONF};
+        if grep -qF "ssl_certificate ${SSL_CERTIFICATE}" "${FILE_CONF}" 2>/dev/null; then
+            echo "ssl config for ${1} already present, skipping"
+        else
+            echo "saving ssl config in ${FILE_CONF}"
+            grep -qF 'include include.d/ssl-redirect.conf;' "${FILE_SSL_CONF}" 2>/dev/null || echo 'include include.d/ssl-redirect.conf;' >> ${FILE_SSL_CONF};
+            echo 'include "include.d/ssl.conf";' >> ${FILE_CONF};
+            echo "ssl_certificate ${SSL_CERTIFICATE};" >> ${FILE_CONF};
+            echo "ssl_certificate_key ${SSL_CERTIFICATE_KEY};" >> ${FILE_CONF};
+        fi
     else
-        echo 'listen 80;' >> ${FILE_CONF};
+        grep -qF 'listen 80;' "${FILE_CONF}" 2>/dev/null || echo 'listen 80;' >> ${FILE_CONF};
         echo "ssl ${1} not found >> ${SSL_CERTIFICATE} -> ${SSL_CERTIFICATE_KEY}"
     fi;
 }
