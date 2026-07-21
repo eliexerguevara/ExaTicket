@@ -1,0 +1,314 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates/Network devices
+
+  templates:
+    - uuid: 1937bcbc6ad5470ebbb8fb2dd6d6662b
+      template: 'ntopng Network Monitor'
+      name: 'ntopng Network Monitor'
+      description: |
+        Monitoreo de trafico via API REST de ntopng (sin agente).
+        Requiere ntopng con --disable-login=1 o ajustar autenticacion.
+
+        MACROS REQUERIDAS en el host:
+          {$NTOPNG_URL}         → URL base ej: http://10.253.252.47:3000
+          {$NTOPNG_NETWORK}     → Red ej: 131.161.234.0/24
+          {$NTOPNG_NETWORK_ENC} → Red URL-encoded ej: 131.161.234.0%2F24
+          {$NTOPNG_ASN}         → Numero AS ej: 52327
+      groups:
+        - name: Templates/Network devices
+
+      macros:
+        - macro: '{$NTOPNG_URL}'
+          value: 'http://10.253.252.47:3000'
+          description: 'URL base de ntopng sin trailing slash'
+        - macro: '{$NTOPNG_NETWORK}'
+          value: '131.161.234.0/24'
+          description: 'Red a monitorear'
+        - macro: '{$NTOPNG_NETWORK_ENC}'
+          value: '131.161.234.0%2F24'
+          description: 'Red a monitorear URL-encoded (/ → %2F)'
+        - macro: '{$NTOPNG_ASN}'
+          value: '52327'
+          description: 'Numero de AS a monitorear'
+
+      items:
+        # ═══════════════════════════════════════════════════════════
+        #  NETWORK — Master item (una sola llamada HTTP por minuto)
+        # ═══════════════════════════════════════════════════════════
+        - uuid: e6d7dcb2cbec4996a73e9402c8b5ebfa
+          name: 'ntopng: Network stats RAW [{$NTOPNG_NETWORK}]'
+          type: HTTP_AGENT
+          key: 'ntopng.network.raw[{$NTOPNG_NETWORK_ENC}]'
+          delay: 1m
+          history: 1h
+          trends: '0'
+          value_type: TEXT
+          url: '{$NTOPNG_URL}/lua/rest/v2/get/network/networks_stats.lua?ifid=0&network={$NTOPNG_NETWORK_ENC}'
+          tags:
+            - tag: component
+              value: raw
+
+        - uuid: de53654038604ffbbce6bcbe8647f638
+          name: 'ntopng: [{$NTOPNG_NETWORK}] Throughput TX'
+          type: DEPENDENT
+          key: 'ntopng.network.throughput_tx[{$NTOPNG_NETWORK_ENC}]'
+          delay: '0'
+          units: bps
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.network.raw[{$NTOPNG_NETWORK_ENC}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value);
+                  var nw = '{$NTOPNG_NETWORK}';
+                  var list = d.rsp;
+                  var n = list.filter(function(x){return x.networkName===nw;})[0] || list[0];
+                  if(!n) return 0;
+                  return Math.round(n.throughput * n.breakdown.percentage_bytes_sent / 100);
+          tags:
+            - tag: component
+              value: network
+            - tag: direction
+              value: tx
+
+        - uuid: 116f6be9d25844a194a80faf748ea66e
+          name: 'ntopng: [{$NTOPNG_NETWORK}] Throughput RX'
+          type: DEPENDENT
+          key: 'ntopng.network.throughput_rx[{$NTOPNG_NETWORK_ENC}]'
+          delay: '0'
+          units: bps
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.network.raw[{$NTOPNG_NETWORK_ENC}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value);
+                  var nw = '{$NTOPNG_NETWORK}';
+                  var list = d.rsp;
+                  var n = list.filter(function(x){return x.networkName===nw;})[0] || list[0];
+                  if(!n) return 0;
+                  return Math.round(n.throughput * n.breakdown.percentage_bytes_rcvd / 100);
+          tags:
+            - tag: component
+              value: network
+            - tag: direction
+              value: rx
+
+        - uuid: f0de55215df54bd2b625fdf2e3b8dbf3
+          name: 'ntopng: [{$NTOPNG_NETWORK}] Bytes enviados'
+          type: DEPENDENT
+          key: 'ntopng.network.bytes_sent[{$NTOPNG_NETWORK_ENC}]'
+          delay: '0'
+          units: B
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.network.raw[{$NTOPNG_NETWORK_ENC}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value);
+                  var nw = '{$NTOPNG_NETWORK}';
+                  var list = d.rsp;
+                  var n = list.filter(function(x){return x.networkName===nw;})[0] || list[0];
+                  return n ? n.bytes_sent : 0;
+          tags:
+            - tag: component
+              value: network
+
+        - uuid: 5dc0c3aae02646bdaa8d759bb8f14da9
+          name: 'ntopng: [{$NTOPNG_NETWORK}] Bytes recibidos'
+          type: DEPENDENT
+          key: 'ntopng.network.bytes_rcvd[{$NTOPNG_NETWORK_ENC}]'
+          delay: '0'
+          units: B
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.network.raw[{$NTOPNG_NETWORK_ENC}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value);
+                  var nw = '{$NTOPNG_NETWORK}';
+                  var list = d.rsp;
+                  var n = list.filter(function(x){return x.networkName===nw;})[0] || list[0];
+                  return n ? n.bytes_rcvd : 0;
+          tags:
+            - tag: component
+              value: network
+
+        - uuid: 58f78823371a471388cce72464c97716
+          name: 'ntopng: [{$NTOPNG_NETWORK}] Hosts activos'
+          type: DEPENDENT
+          key: 'ntopng.network.hosts[{$NTOPNG_NETWORK_ENC}]'
+          delay: '0'
+          units: ''
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.network.raw[{$NTOPNG_NETWORK_ENC}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value);
+                  var nw = '{$NTOPNG_NETWORK}';
+                  var list = d.rsp;
+                  var n = list.filter(function(x){return x.networkName===nw;})[0] || list[0];
+                  return n ? n.hosts : 0;
+          tags:
+            - tag: component
+              value: network
+
+        # ═══════════════════════════════════════════════════════════
+        #  ASN — Master item
+        # ═══════════════════════════════════════════════════════════
+        - uuid: 3365edc488e74c6a9365bac409230c2d
+          name: 'ntopng: ASN {$NTOPNG_ASN} stats RAW'
+          type: HTTP_AGENT
+          key: 'ntopng.asn.raw[{$NTOPNG_ASN}]'
+          delay: 1m
+          history: 1h
+          trends: '0'
+          value_type: TEXT
+          url: '{$NTOPNG_URL}/lua/rest/v2/get/asn/get_as_data.lua?ifid=0&asn={$NTOPNG_ASN}'
+          tags:
+            - tag: component
+              value: raw
+
+        - uuid: a7b9a3a2a4ed499f84a317892562f36d
+          name: 'ntopng: ASN {$NTOPNG_ASN} Throughput TX'
+          type: DEPENDENT
+          key: 'ntopng.asn.throughput_tx[{$NTOPNG_ASN}]'
+          delay: '0'
+          units: bps
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.asn.raw[{$NTOPNG_ASN}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value);
+                  var n = d.rsp[0];
+                  if(!n) return 0;
+                  var total = n.bytes_sent + n.bytes_rcvd;
+                  if(total === 0) return 0;
+                  return Math.round(n.throughput * (n.bytes_sent / total) * 8);
+          tags:
+            - tag: component
+              value: asn
+            - tag: direction
+              value: tx
+
+        - uuid: c87052295a844acc99d1d471304ed5b8
+          name: 'ntopng: ASN {$NTOPNG_ASN} Throughput RX'
+          type: DEPENDENT
+          key: 'ntopng.asn.throughput_rx[{$NTOPNG_ASN}]'
+          delay: '0'
+          units: bps
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.asn.raw[{$NTOPNG_ASN}]'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value);
+                  var n = d.rsp[0];
+                  if(!n) return 0;
+                  var total = n.bytes_sent + n.bytes_rcvd;
+                  if(total === 0) return 0;
+                  return Math.round(n.throughput * (n.bytes_rcvd / total) * 8);
+          tags:
+            - tag: component
+              value: asn
+            - tag: direction
+              value: rx
+
+        - uuid: a6f5dfe39d4b42e8896d45412a64d599
+          name: 'ntopng: ASN {$NTOPNG_ASN} Bytes enviados'
+          type: DEPENDENT
+          key: 'ntopng.asn.bytes_sent[{$NTOPNG_ASN}]'
+          delay: '0'
+          units: B
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.asn.raw[{$NTOPNG_ASN}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.rsp[0].bytes_sent'
+          tags:
+            - tag: component
+              value: asn
+
+        - uuid: a1293189e30f4265b08dd65ad8d21bb3
+          name: 'ntopng: ASN {$NTOPNG_ASN} Bytes recibidos'
+          type: DEPENDENT
+          key: 'ntopng.asn.bytes_rcvd[{$NTOPNG_ASN}]'
+          delay: '0'
+          units: B
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.asn.raw[{$NTOPNG_ASN}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.rsp[0].bytes_rcvd'
+          tags:
+            - tag: component
+              value: asn
+
+        - uuid: a7e92e3d40a9457e84dedb34e432df79
+          name: 'ntopng: ASN {$NTOPNG_ASN} Hosts activos'
+          type: DEPENDENT
+          key: 'ntopng.asn.hosts[{$NTOPNG_ASN}]'
+          delay: '0'
+          units: ''
+          value_type: FLOAT
+          master_item:
+            key: 'ntopng.asn.raw[{$NTOPNG_ASN}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.rsp[0].num_hosts'
+          tags:
+            - tag: component
+              value: asn
+
+  graphs:
+    - uuid: 8acb113775da4163888ae74637dc3745
+      name: 'ntopng: [{$NTOPNG_NETWORK}] Throughput TX vs RX'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: LAST
+          item:
+            host: 'ntopng Network Monitor'
+            key: 'ntopng.network.throughput_tx[{$NTOPNG_NETWORK_ENC}]'
+        - color: F63100
+          calc_fnc: LAST
+          item:
+            host: 'ntopng Network Monitor'
+            key: 'ntopng.network.throughput_rx[{$NTOPNG_NETWORK_ENC}]'
+
+    - uuid: 9ba9dd95c1a84766841c095f5fb9782e
+      name: 'ntopng: ASN {$NTOPNG_ASN} Throughput TX vs RX'
+      graph_items:
+        - color: 1A7C11
+          calc_fnc: LAST
+          item:
+            host: 'ntopng Network Monitor'
+            key: 'ntopng.asn.throughput_tx[{$NTOPNG_ASN}]'
+        - color: F63100
+          calc_fnc: LAST
+          item:
+            host: 'ntopng Network Monitor'
+            key: 'ntopng.asn.throughput_rx[{$NTOPNG_ASN}]'
