@@ -1,0 +1,5 @@
+FROM phpmyadmin/phpmyadmin:latest
+RUN apt-get update && \
+    apt-get install --only-upgrade -y apache2 apache2-bin apache2-data apache2-utils && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
