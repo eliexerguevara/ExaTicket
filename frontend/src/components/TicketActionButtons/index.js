@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 
 import { makeStyles } from "@material-ui/core/styles";
@@ -12,6 +12,7 @@ import ButtonWithSpinner from "../ButtonWithSpinner";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import SplynxDocumentModal from "../SplynxDocumentModal";
+import UISPDocumentModal from "../UISPDocumentModal";
 
 const useStyles = makeStyles(theme => ({
 	actionButtons: {
@@ -38,8 +39,28 @@ const TicketActionButtons = ({ ticket }) => {
 	const [anchorEl, setAnchorEl] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [documentModalOpen, setDocumentModalOpen] = useState(false);
+	const [activeCRM, setActiveCRM] = useState(null); // 'splynx' | 'uisp' | null
 	const ticketOptionsMenuOpen = Boolean(anchorEl);
 	const { user } = useContext(AuthContext);
+
+	useEffect(() => {
+		const fetchCRMSettings = async () => {
+			try {
+				const { data } = await api.get("/settings");
+				const find = key => (data.find(s => s.key === key) || {}).value || "";
+				if (find("uispEnabled") === "enabled") {
+					setActiveCRM("uisp");
+				} else if (find("splynxEnabled") === "enabled") {
+					setActiveCRM("splynx");
+				} else {
+					setActiveCRM(null);
+				}
+			} catch {
+				setActiveCRM(null);
+			}
+		};
+		fetchCRMSettings();
+	}, []);
 
 	const handleOpenTicketOptionsMenu = e => {
 		setAnchorEl(e.currentTarget);
@@ -170,12 +191,21 @@ const TicketActionButtons = ({ ticket }) => {
 				</ButtonWithSpinner>
 			)}
 
-			<SplynxDocumentModal
-				open={documentModalOpen}
-				ticket={ticket}
-				onClose={handleDocumentModalClose}
-				onResolveDirect={handleResolveDirect}
-			/>
+			{activeCRM === "uisp" ? (
+				<UISPDocumentModal
+					open={documentModalOpen}
+					ticket={ticket}
+					onClose={handleDocumentModalClose}
+					onResolveDirect={handleResolveDirect}
+				/>
+			) : (
+				<SplynxDocumentModal
+					open={documentModalOpen}
+					ticket={ticket}
+					onClose={handleDocumentModalClose}
+					onResolveDirect={handleResolveDirect}
+				/>
+			)}
 		</div>
 	);
 };

@@ -119,6 +119,13 @@ const Settings = () => {
 	const [testingConn, setTestingConn] = useState(false);
 	const [testResult, setTestResult] = useState(null); // { ok, message }
 
+	// UISP state
+	const [uispApiUrl, setUispApiUrl] = useState("");
+	const [uispApiKey, setUispApiKey] = useState("");
+	const [showUispKey, setShowUispKey] = useState(false);
+	const [testingUisp, setTestingUisp] = useState(false);
+	const [uispTestResult, setUispTestResult] = useState(null); // { ok, message }
+
 	// Zabbix state
 	const [zabbixApiUrl, setZabbixApiUrl] = useState("");
 	const [zabbixApiToken, setZabbixApiToken] = useState("");
@@ -154,6 +161,8 @@ const Settings = () => {
 				setSplynxApiSecret(find("splynxApiSecret"));
 				setSplynxAdminLogin(find("splynxAdminLogin"));
 				setSplynxAdminPassword(find("splynxAdminPassword"));
+				setUispApiUrl(find("uispApiUrl"));
+				setUispApiKey(find("uispApiKey"));
 				setZabbixApiUrl(find("zabbixApiUrl"));
 				setZabbixApiToken(find("zabbixApiToken"));
 				setZabbixApiUser(find("zabbixApiUser"));
@@ -240,6 +249,34 @@ const Settings = () => {
 			setTestResult({ ok: false, message: "Error al conectar con el servidor" });
 		} finally {
 			setTestingConn(false);
+		}
+	};
+
+	const handleSaveUISP = async () => {
+		try {
+			await Promise.all([
+				api.put("/settings/uispApiUrl", { value: uispApiUrl }),
+				api.put("/settings/uispApiKey", { value: uispApiKey }),
+			]);
+			toast.success(i18n.t("settings.success"));
+		} catch (err) {
+			toastError(err);
+		}
+	};
+
+	const handleTestUISP = async () => {
+		setTestingUisp(true);
+		setUispTestResult(null);
+		try {
+			const { data } = await api.post("/uisp/test-connection", {
+				apiUrl: uispApiUrl,
+				apiKey: uispApiKey,
+			});
+			setUispTestResult(data);
+		} catch {
+			setUispTestResult({ ok: false, message: "Error al conectar con el servidor UISP" });
+		} finally {
+			setTestingUisp(false);
 		}
 	};
 
@@ -543,6 +580,98 @@ const Settings = () => {
 								color="primary"
 								size="small"
 								onClick={handleSaveSplynx}
+							>
+								{i18n.t("aiChat.settings.save")}
+							</Button>
+						</div>
+
+					</AccordionDetails>
+				</Accordion>
+
+				{/* ── UISP / UCRM ── Accordion / submenu ───────────────── */}
+				<Divider style={{ margin: "16px 0" }} />
+				<Typography variant="body1" className={classes.sectionTitle}>
+					🔌 UISP / UCRM
+				</Typography>
+
+				<Paper className={classes.paper}>
+					<Typography variant="body1">Integración UISP/UCRM</Typography>
+					<Select
+						margin="dense"
+						variant="outlined"
+						native
+						name="uispEnabled"
+						value={settings.length > 0 ? getSettingValue("uispEnabled") : "disabled"}
+						className={classes.settingOption}
+						onChange={handleChangeSetting}
+					>
+						<option value="enabled">Habilitado</option>
+						<option value="disabled">Deshabilitado</option>
+					</Select>
+				</Paper>
+
+				<Accordion className={classes.accordionRoot} defaultExpanded={false}>
+					<AccordionSummary
+						expandIcon={<ExpandMoreIcon />}
+						className={classes.accordionSummary}
+					>
+						<Typography style={{ fontWeight: 600 }}>
+							🔑 Credenciales de conexión UISP
+						</Typography>
+					</AccordionSummary>
+					<AccordionDetails className={classes.accordionDetails}>
+
+						<TextField
+							label="URL de la API UISP"
+							helperText="Ej: https://uisp.tudominio.com"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							value={uispApiUrl}
+							onChange={e => { setUispApiUrl(e.target.value); setUispTestResult(null); }}
+						/>
+
+						<TextField
+							label="API Key (X-Auth-App-Key)"
+							margin="dense"
+							variant="outlined"
+							fullWidth
+							type={showUispKey ? "text" : "password"}
+							value={uispApiKey}
+							onChange={e => { setUispApiKey(e.target.value); setUispTestResult(null); }}
+							InputProps={{
+								endAdornment: (
+									<InputAdornment position="end">
+										<IconButton size="small" onClick={() => setShowUispKey(v => !v)}>
+											{showUispKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
+										</IconButton>
+									</InputAdornment>
+								),
+							}}
+						/>
+
+						{uispTestResult && (
+							<Typography className={uispTestResult.ok ? classes.testOk : classes.testFail}>
+								{uispTestResult.ok ? "✅" : "❌"} {uispTestResult.message}
+							</Typography>
+						)}
+
+						<div className={classes.btnRow}>
+							<Button
+								variant="outlined"
+								color="primary"
+								size="small"
+								disabled={testingUisp || !uispApiUrl || !uispApiKey}
+								onClick={handleTestUISP}
+								startIcon={testingUisp ? <CircularProgress size={14} /> : null}
+							>
+								{testingUisp ? "Probando..." : "Probar conexión"}
+							</Button>
+							<Button
+								variant="contained"
+								color="primary"
+								size="small"
+								onClick={handleSaveUISP}
 							>
 								{i18n.t("aiChat.settings.save")}
 							</Button>
