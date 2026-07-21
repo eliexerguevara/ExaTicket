@@ -14,6 +14,7 @@ import apiRoutes from "./apiRoutes";
 import labelRoutes from "./labelRoutes";
 import telegramRoutes from "./telegramRoutes";
 import splynxRoutes from "./splynxRoutes";
+import uispRoutes from "./uispRoutes";
 
 const routes = Router();
 
@@ -31,5 +32,6 @@ routes.use("/api/messages", apiRoutes);
 routes.use(labelRoutes);
 routes.use(telegramRoutes);
 routes.use(splynxRoutes);
+routes.use(uispRoutes);
 
 export default routes;

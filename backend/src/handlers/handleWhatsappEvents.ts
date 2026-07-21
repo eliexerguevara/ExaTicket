@@ -44,6 +44,73 @@ const getSplynxInfo = async (
   }
 };
 
+/** Lazy-load UISP so the backend doesn't crash if the module isn't compiled yet. */
+const getUISPInfo = async (
+  phone: string,
+  isFirstMessage = false
+): Promise<{ context: string; customerId: number | null }> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { buildUISPContext } = require("../services/UISPService/UISPService");
+    return await buildUISPContext(phone, isFirstMessage);
+  } catch {
+    return { context: "", customerId: null };
+  }
+};
+
+/** Search UISP for a customer using free-form input (phone number or name). */
+const verifyUISPClient = async (
+  input: string
+): Promise<{ customerId: number | null; name: string | null }> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { findClientByInput } = require("../services/UISPService/UISPService");
+    const client = await findClientByInput(input);
+    if (client) return { customerId: client.id, name: client.name };
+  } catch { /* ignore */ }
+  return { customerId: null, name: null };
+};
+
+/**
+ * Get customer info from whichever CRM is enabled (Splynx OR UISP).
+ * Returns a unified result compatible with both callers.
+ */
+const getCRMInfo = async (
+  phone: string,
+  isFirstMessage = false
+): Promise<{ context: string; hasOutage: boolean; customerId: number | null; crmType: "splynx" | "uisp" | null }> => {
+  let splynxEnabled = false;
+  let uispEnabled = false;
+  try { splynxEnabled = (await CheckSettings("splynxEnabled")) === "enabled"; } catch { /* ignore */ }
+  try { uispEnabled = (await CheckSettings("uispEnabled")) === "enabled"; } catch { /* ignore */ }
+
+  if (splynxEnabled) {
+    const info = await getSplynxInfo(phone, isFirstMessage);
+    return { ...info, crmType: "splynx" };
+  }
+  if (uispEnabled) {
+    const info = await getUISPInfo(phone, isFirstMessage);
+    return { ...info, hasOutage: false, crmType: "uisp" };
+  }
+  return { context: "", hasOutage: false, customerId: null, crmType: null };
+};
+
+/**
+ * Verify customer by free-form input in whichever CRM is enabled.
+ */
+const verifyCRMClient = async (
+  input: string
+): Promise<{ customerId: number | null; name: string | null }> => {
+  let splynxEnabled = false;
+  let uispEnabled = false;
+  try { splynxEnabled = (await CheckSettings("splynxEnabled")) === "enabled"; } catch { /* ignore */ }
+  try { uispEnabled = (await CheckSettings("uispEnabled")) === "enabled"; } catch { /* ignore */ }
+
+  if (splynxEnabled) return verifySplynxCustomer(input);
+  if (uispEnabled) return verifyUISPClient(input);
+  return { customerId: null, name: null };
+};
+
 /** Search Splynx for a customer using free-form input (phone number or name). */
 const verifySplynxCustomer = async (
   input: string
@@ -130,8 +197,118 @@ const createSplynxResolutionTicket = async (
 };
 
 /**
+ * When the contact number is a Telegram chat ID (not a real phone), UISP lookup
+ * by contact number fails. This function scans the client's messages in the
+ * conversation to extract a phone number or name and retries the UISP lookup.
+ * Returns the UISP client ID if found, null otherwise.
+ */
+const findUISPClientFromConversation = async (ticketId: number): Promise<number | null> => {
+  try {
+    const { findClientByPhone, findClientsByName } = require("../services/UISPService/UISPService");
+
+    // Fetch the last 40 client messages (fromMe=false) for this ticket
+    const messages = await Message.findAll({
+      where: { ticketId, fromMe: false, isDeleted: false },
+      order: [["createdAt", "ASC"]],
+      limit: 40
+    });
+
+    const texts = messages.map(m => (m as any).body || "").filter(Boolean);
+
+    // 1. Try every phone number found in the conversation (7–15 digits)
+    const phoneRe = /\b\d{7,15}\b/g;
+    for (const text of texts) {
+      const phones = text.match(phoneRe) || [];
+      for (const phone of phones) {
+        const client = await findClientByPhone(phone);
+        if (client) {
+          logger.info(`findUISPClientFromConversation: matched phone ${phone} → clientId=${client.id}`);
+          return client.id;
+        }
+      }
+    }
+
+    // 2. Try name search with words from the conversation (words ≥ 4 chars)
+    // Only try words that look like proper nouns: contain at least one uppercase letter
+    // and are not all-lowercase common words. This avoids matching "internet", "gracias", etc.
+    const allText = texts.join(" ");
+    const properNouns = [...new Set(
+      allText.split(/\s+/).filter(w =>
+        w.length >= 3 &&
+        /[A-ZÁÉÍÓÚÑ]/.test(w) &&        // has at least one uppercase letter
+        /^[\wáéíóúÁÉÍÓÚñÑ]+$/i.test(w)  // only word chars
+      )
+    )].sort((a, b) => b.length - a.length);
+
+    for (const word of properNouns.slice(0, 10)) {
+      const clients = await findClientsByName(word);
+      if (clients.length === 1) {
+        logger.info(`findUISPClientFromConversation: matched name "${word}" → clientId=${clients[0].id}`);
+        return clients[0].id;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    logger.error(err, `findUISPClientFromConversation error for ticket ${ticketId}`);
+    return null;
+  }
+};
+
+/**
+ * Create a UISP ticket recording the resolved WhatsApp/Telegram conversation.
+ */
+const createUISPResolutionTicket = async (
+  customerId: number,
+  ticketId: number
+): Promise<void> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createUISPTicket } = require("../services/UISPService/UISPService");
+    const summary = await getTicketSummary(ticketId);
+    const dateStr = new Date().toLocaleDateString("es", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+    const subject = `Soporte WhatsApp ${dateStr}`;
+    const body = summary?.summary
+      ? `Caso resuelto vía soporte WhatsApp.\n\nResumen:\n${summary.summary}`
+      : "Caso resuelto vía soporte WhatsApp.";
+    const result = await createUISPTicket(customerId, subject, body, 3);
+    if (result?.id) {
+      logger.info(
+        `UISP resolution ticket created (id=${result.id}) for client ${customerId} (exaticket ${ticketId})`
+      );
+    } else {
+      logger.warn(
+        `UISP: createUISPResolutionTicket returned null for client ${customerId} (exaticket ${ticketId})`
+      );
+    }
+  } catch (err) {
+    logger.error(err, `Error creating UISP resolution ticket for ticket ${ticketId}`);
+  }
+};
+
+/**
+ * Create a resolution ticket in whichever CRM is enabled (Splynx OR UISP).
+ */
+const createCRMResolutionTicket = async (
+  customerId: number,
+  ticketId: number
+): Promise<void> => {
+  let uispEnabled = false;
+  try { uispEnabled = (await CheckSettings("uispEnabled")) === "enabled"; } catch { /* ignore */ }
+  if (uispEnabled) {
+    await createUISPResolutionTicket(customerId, ticketId);
+  } else {
+    await createSplynxResolutionTicket(customerId, ticketId);
+  }
+};
+
+/**
  * When the global AI is disabled, keyword-based case resolution still needs
- * to be detected so Splynx gets documented automatically.
+ * to be detected so the CRM (Splynx or UISP) gets documented automatically.
  * This runs instead of handleAISupport when aiIsActive === false.
  * It does NOT send automatic messages and does NOT close the ticket —
  * both remain the agent's responsibility.
@@ -143,14 +320,12 @@ const handleDocumentationWhenAIOff = async (
 ): Promise<void> => {
   if (!clientConfirmsResolution(messageBody)) return;
   try {
-    const splynxInfo = await getSplynxInfo(contactNumber, false);
-    if (!splynxInfo.customerId && ticket.splynxCustomerId) {
-      splynxInfo.customerId = ticket.splynxCustomerId;
-    }
-    if (splynxInfo.customerId) {
-      await createSplynxResolutionTicket(splynxInfo.customerId, ticket.id);
+    const crmInfo = await getCRMInfo(contactNumber, false);
+    const customerId = crmInfo.customerId || ticket.splynxCustomerId || null;
+    if (customerId) {
+      await createCRMResolutionTicket(customerId, ticket.id);
       logger.info(
-        `handleDocumentationWhenAIOff: Splynx documented for ticket ${ticket.id} (AI off, keyword resolution detected)`
+        `handleDocumentationWhenAIOff: CRM documented for ticket ${ticket.id} (AI off, keyword resolution detected)`
       );
     }
   } catch (err) {
@@ -610,24 +785,20 @@ const handleAISupport = async (
     }
 
     if (choice === "soporte") {
-      let splynxEnabled = false;
-      try { splynxEnabled = (await CheckSettings("splynxEnabled")) === "enabled"; } catch { /* ignore */ }
-
-      if (splynxEnabled) {
-        const check = await getSplynxInfo(contactNumber, false);
-        if (check.customerId) {
-          await ticket.update({ aiAttempts: 3 });
-          await sendMsg(whatsappId, contactNumber, "Con gusto te ayudo. ¿Cuál es el problema técnico?");
-        } else {
-          await ticket.update({ aiAttempts: 2 });
-          await sendMsg(
-            whatsappId,
-            contactNumber,
-            "Para brindarte soporte, primero necesito verificar que eres cliente. 🔍\n\n" +
-            "No encontré tu número en nuestro sistema. Por favor indícame tu *nombre completo* " +
-            "o el *número de teléfono* con el que tienes el servicio."
-          );
-        }
+      const check = await getCRMInfo(contactNumber, false);
+      if (check.customerId !== null) {
+        await ticket.update({ aiAttempts: 3 });
+        await sendMsg(whatsappId, contactNumber, "Con gusto te ayudo. ¿Cuál es el problema técnico?");
+      } else if (check.crmType !== null) {
+        // CRM enabled but customer not found by phone — request identity
+        await ticket.update({ aiAttempts: 2 });
+        await sendMsg(
+          whatsappId,
+          contactNumber,
+          "Para brindarte soporte, primero necesito verificar que eres cliente. 🔍\n\n" +
+          "No encontré tu número en nuestro sistema. Por favor indícame tu *nombre completo* " +
+          "o el *número de teléfono* con el que tienes el servicio."
+        );
       } else {
         await ticket.update({ aiAttempts: 3 });
         await sendMsg(whatsappId, contactNumber, "Con gusto te ayudo. ¿Cuál es el problema técnico?");
@@ -666,13 +837,13 @@ const handleAISupport = async (
   }
 
   // ── PHASE 2.5: Customer identity verification ─────────────────────────────
-  // Reached only when Splynx is enabled and the customer was NOT found by phone.
+  // Reached only when a CRM is enabled and the customer was NOT found by phone.
   // The client's message contains the name or phone number they provided.
   if (ticket.aiAttempts === 2) {
-    const { customerId: foundId, name: foundName } = await verifySplynxCustomer(messageBody);
+    const { customerId: foundId, name: foundName } = await verifyCRMClient(messageBody);
 
     if (foundId) {
-      // Persist the verified Splynx customer ID so Phase 3 can create the resolution ticket
+      // Persist the verified CRM customer ID so Phase 3 can create the resolution ticket
       await ticket.update({ aiAttempts: 3, splynxCustomerId: foundId });
       await sendMsg(
         whatsappId,
@@ -721,19 +892,18 @@ Reglas adicionales:
     // use default
   }
 
-  // Fetch Splynx customer context and metadata (non-blocking).
+  // Fetch CRM customer context and metadata (non-blocking).
   // isFirstMessage=true on the first verified support interaction (aiAttempts===3).
   const isFirstSupportMsg = ticket.aiAttempts === 3; // was 2 before verification phase
-  const splynxInfo = await getSplynxInfo(contactNumber, isFirstSupportMsg);
+  const crmInfo = await getCRMInfo(contactNumber, isFirstSupportMsg);
   // If phone lookup didn't find the customer but we verified by name in Phase 2.5,
-  // use the persisted splynxCustomerId so the resolution ticket is still created.
-  if (!splynxInfo.customerId && ticket.splynxCustomerId) {
-    splynxInfo.customerId = ticket.splynxCustomerId;
+  // use the persisted CRM customer ID so the resolution ticket is still created.
+  if (!crmInfo.customerId && ticket.splynxCustomerId) {
+    crmInfo.customerId = ticket.splynxCustomerId;
   }
 
-  // Auto-apply "Falla General" label ONLY when Splynx explicitly confirmed an active outage.
-  // Using the structured flag instead of a regex avoids false positives from ticket history.
-  if (splynxInfo.hasOutage) {
+  // Auto-apply "Falla General" label ONLY when the CRM explicitly confirmed an active outage.
+  if (crmInfo.hasOutage) {
     await autoApplyLabel(ticket.id, "Falla General", "#ef4444");
   }
 
@@ -746,9 +916,17 @@ Reglas adicionales:
       "Tu caso ha quedado registrado. ¡Que tengas un excelente día!";
     await sendMsg(whatsappId, contactNumber, closingMsg);
 
-    // Create Splynx ticket recording the resolved conversation
-    if (splynxInfo.customerId) {
-      await createSplynxResolutionTicket(splynxInfo.customerId, ticket.id);
+    // Create CRM ticket recording the resolved conversation.
+    // If UISP lookup by contact number failed (e.g. Telegram chat ID), try to
+    // find the client from phone/name mentioned in the conversation.
+    {
+      let resolvedCustomerId = crmInfo.customerId;
+      if (!resolvedCustomerId) {
+        resolvedCustomerId = await findUISPClientFromConversation(ticket.id);
+      }
+      if (resolvedCustomerId) {
+        await createCRMResolutionTicket(resolvedCustomerId, ticket.id);
+      }
     }
 
     try {
@@ -769,7 +947,7 @@ Reglas adicionales:
   const { response, shouldEscalate, shouldResolve } = await getAIResponse(
     ticket.id,
     systemPrompt,
-    splynxInfo.context || undefined
+    crmInfo.context || undefined
   );
 
   if (shouldEscalate) {
@@ -785,9 +963,16 @@ Reglas adicionales:
       await sendMsg(whatsappId, contactNumber, response);
     }
 
-    // Create Splynx ticket recording the resolved conversation
-    if (splynxInfo.customerId) {
-      await createSplynxResolutionTicket(splynxInfo.customerId, ticket.id);
+    // Create CRM ticket recording the resolved conversation.
+    // Fallback: scan conversation for phone/name if contact number didn't match UISP.
+    {
+      let resolvedCustomerId = crmInfo.customerId;
+      if (!resolvedCustomerId) {
+        resolvedCustomerId = await findUISPClientFromConversation(ticket.id);
+      }
+      if (resolvedCustomerId) {
+        await createCRMResolutionTicket(resolvedCustomerId, ticket.id);
+      }
     }
 
     // Close ExaTicket
