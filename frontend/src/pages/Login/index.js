@@ -12,7 +12,7 @@ import {
   Box,
 } from "@material-ui/core";
 
-import { Visibility, VisibilityOff, Refresh } from "@material-ui/icons";
+import { Visibility, VisibilityOff } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
 
 import logo from "../../assets/logo.png";
@@ -308,7 +308,7 @@ const Login = () => {
                   size="small"
                   title="Generar nuevo captcha"
                 >
-                  <Refresh fontSize="small" />
+                  ↺
                 </IconButton>
               </Box>
               {captchaError && (
