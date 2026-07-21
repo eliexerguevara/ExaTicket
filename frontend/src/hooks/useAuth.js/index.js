@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import openSocket from "../../services/socket-io";
 
@@ -99,7 +99,6 @@ const useAuth = () => {
 		} catch (err) {
 			toastError(err);
 			setLoading(false);
-			throw err;
 		}
 	};
 
