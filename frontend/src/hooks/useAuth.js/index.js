@@ -99,6 +99,7 @@ const useAuth = () => {
 		} catch (err) {
 			toastError(err);
 			setLoading(false);
+			throw err;
 		}
 	};
 
