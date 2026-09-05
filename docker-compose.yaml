@@ -42,7 +42,8 @@ services:
       - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-wwebjs}
       - CHROME_BIN=/usr/bin/google-chrome-stable
       - CHROME_ARGS=--no-sandbox --disable-setuid-sandbox
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - NODE_ENV=production
       - SMTP_HOST=${SMTP_HOST:-}
@@ -55,6 +56,9 @@ services:
       - ZABBIX_API_TOKEN=${ZABBIX_API_TOKEN:-}
       - ZABBIX_API_USER=${ZABBIX_API_USER:-}
       - ZABBIX_API_PASSWORD=${ZABBIX_API_PASSWORD:-}
+      - TELEGRAM_REMINDER_BOT_TOKEN=${TELEGRAM_REMINDER_BOT_TOKEN:-}
+      - TELEGRAM_REMINDER_CHAT_ID=${TELEGRAM_REMINDER_CHAT_ID:-}
+      - TELEGRAM_REMINDER_TZ=${TELEGRAM_REMINDER_TZ:-America/Argentina/Buenos_Aires}
     ports:
       - ${BACKEND_PORT:-8080}:3000
     volumes:

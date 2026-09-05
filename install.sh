@@ -89,6 +89,19 @@ if ! command -v google-chrome-stable >/dev/null; then
   apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1
 fi
 
+# ───────────────────────────── 5.5 Ollama (chat IA local) ─────────────────────────────
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+if ! command -v ollama >/dev/null; then
+  curl -fsSL https://ollama.com/install.sh | sh
+fi
+systemctl enable --now ollama 2>/dev/null || true
+# Espera a que el servicio levante antes de descargar el modelo
+for i in $(seq 1 15); do
+  curl -sf http://127.0.0.1:11434 >/dev/null && break
+  sleep 2
+done
+ollama pull "$OLLAMA_MODEL"
+
 # ───────────────────────────── 6. Nginx (+ Certbot si hay dominio) ─────────────────────────────
 apt-get install -y nginx
 if [[ -n "$DOMAIN" ]]; then
@@ -150,10 +163,9 @@ BACKEND_URL=${BACKEND_URL}
 FRONTEND_URL=${FRONTEND_URL}
 PROXY_PORT=${BACKEND_PORT}
 
-# Agrega tu clave de IA (Anthropic/Claude) aqui si vas a usar el chat con IA.
-# Si vas a reemplazarla por Ollama, este es el archivo que hay que tocar
-# junto con backend/src/services/AIServices/GetAIResponse.ts
-ANTHROPIC_API_KEY=
+# Chat IA (Ollama, local, sin API key)
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=${OLLAMA_MODEL}
 
 ZABBIX_API_URL=
 ZABBIX_API_TOKEN=
@@ -304,10 +316,12 @@ DB password:     ${DB_PASS}
 JWT_SECRET:          ${JWT_SECRET}
 JWT_REFRESH_SECRET:  ${JWT_REFRESH_SECRET}
 
+--- Chat IA ---
+Motor:  Ollama (local)  |  Modelo: ${OLLAMA_MODEL}
+Para cambiar de modelo: ollama pull <modelo> && editar OLLAMA_MODEL en
+${INSTALL_DIR}/backend/.env && pm2 restart exaticket-backend
+
 --- Pendiente ---
-- Agregar ANTHROPIC_API_KEY en ${INSTALL_DIR}/backend/.env si vas a usar el
-  chat con IA (Claude), o reemplazar backend/src/services/AIServices/GetAIResponse.ts
-  para usar Ollama, y luego: pm2 restart exaticket-backend
 - El usuario/admin inicial de ExaTicket se crea desde la propia interfaz web
   (pantalla de registro) o revisando los seeders en backend/src/database/seeds.
 

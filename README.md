@@ -165,9 +165,10 @@ FRONTEND_SERVER_NAME=                         # ej: app.tudominio.com (vacío = 
 FRONTEND_URL=http://IP_DEL_SERVIDOR:3000
 
 # ============================================================
-# IA DE SOPORTE (opcional — dejar vacío para deshabilitar)
+# IA DE SOPORTE — Ollama (LLM local, sin API key)
 # ============================================================
-ANTHROPIC_API_KEY=                            # Obtén en https://console.anthropic.com
+OLLAMA_BASE_URL=http://127.0.0.1:11434        # URL del servidor Ollama
+OLLAMA_MODEL=llama3.2                         # Descarga el modelo primero: `ollama pull llama3.2`
 
 # ============================================================
 # PHPMYADMIN
@@ -267,18 +268,23 @@ El backend espera automáticamente a que MySQL esté saludable (`healthcheck`) a
 
 ## Configurar el Chat IA
 
-La IA responde automáticamente al primer mensaje de cada ticket e intenta resolver el problema antes de pasarlo a un operador humano. Usa el modelo **Claude Haiku** (Anthropic) por su velocidad y bajo costo.
+La IA responde automáticamente al primer mensaje de cada ticket e intenta resolver el problema antes de pasarlo a un operador humano. Usa **Ollama** (LLM local, sin costo por token ni envío de datos a terceros) — el modelo por defecto es `llama3.2`, pero puedes usar cualquier modelo que Ollama soporte.
 
 ### Activación rápida
 
-1. Obtén tu API Key en [console.anthropic.com](https://console.anthropic.com)
-2. Agrégala al `.env`:
+1. Instala Ollama en el servidor (o en otra máquina de tu red) y descarga un modelo:
    ```bash
-   ANTHROPIC_API_KEY=sk-ant-...
+   curl -fsSL https://ollama.com/install.sh | sh
+   ollama pull llama3.2
+   ```
+2. Configura el `.env` del backend (ajusta si Ollama corre en otra máquina):
+   ```bash
+   OLLAMA_BASE_URL=http://127.0.0.1:11434
+   OLLAMA_MODEL=llama3.2
    ```
 3. Reinicia el backend:
    ```bash
-   docker compose restart backend
+   docker compose restart backend   # o: pm2 restart exaticket-backend
    ```
 4. En la aplicación ve a **Configuración → 🤖 IA de Soporte Técnico**
 5. Cambia el estado a **Habilitado**
@@ -901,6 +907,13 @@ ExaTicket/
 
 ## Historial de cambios
 
+### v2.1.0 — 2026-09-05
+- **Chat IA migrado de Anthropic Claude a Ollama** (LLM local, sin API key ni costo por token)
+  - `GetAIResponse.ts` ahora llama a `POST {OLLAMA_BASE_URL}/api/chat` en vez del SDK de Anthropic
+  - Nuevas variables de entorno: `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`) y `OLLAMA_MODEL` (default `llama3.2`), reemplazan a `ANTHROPIC_API_KEY`
+  - Quitada la dependencia `@anthropic-ai/sdk` de `backend/package.json`
+  - `install.sh`, `.env.example` y `docker-compose.yaml` actualizados con las nuevas variables
+
 ### v2.0.0 — 2026-06-02
 
 #### Sistema de etiquetas — corrección multicapa completa
@@ -977,7 +990,7 @@ Las etiquetas desaparecían de la vista de detalle del ticket por una cadena de 
   - Modelo `Telegram` en base de datos: `id`, `name`, `botToken`, `status` (`connected`/`disconnected`/`error`), `greetingMessage`
   - Migración `20260527200000-create-telegrams.ts`: crea tabla `Telegrams` y columna `telegramId` en `Tickets`
   - `TelegramBotService.ts`: polling con `node-telegram-bot-api` v0.67.0, arranque automático de todos los bots al iniciar el servidor
-  - Pipeline IA idéntico al de WhatsApp: **Fase 1** (pregunta de enrutamiento) → **Fase 2** (selección de departamento: Administración / Ventas / Soporte) → **Fase 3** (soporte IA con Anthropic Claude Haiku)
+  - Pipeline IA idéntico al de WhatsApp: **Fase 1** (pregunta de enrutamiento) → **Fase 2** (selección de departamento: Administración / Ventas / Soporte) → **Fase 3** (soporte IA con Ollama)
   - Integración Splynx completa en Telegram: contexto de cliente, estado de servicio, ping en tiempo real y cortes generales
   - Todos los mensajes entrantes Y salientes guardados en la base de datos → los agentes ven la conversación completa en la vista del ticket
   - Escalado automático a cola de soporte cuando la IA no puede resolver, el usuario lo solicita o se alcanza el límite de intentos
