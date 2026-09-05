@@ -27,8 +27,7 @@ module.exports = {
       }
     });
 
-    await queryInterface.addConstraint("TicketLabels", {
-      fields: ["ticketId", "labelId"],
+    await queryInterface.addConstraint("TicketLabels", ["ticketId", "labelId"], {
       type: "unique",
       name: "ticket_label_unique"
     });

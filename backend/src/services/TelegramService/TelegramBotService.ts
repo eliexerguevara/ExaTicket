@@ -96,25 +96,6 @@ const clientConfirmsResolution = (body: string): boolean => {
 const findQueueByName = async (keyword: string): Promise<Queue | null> =>
   Queue.findOne({ where: { name: { [Op.like]: `%${keyword}%` } } });
 
-/** Apply a label by name to a ticket (creates label if missing, skips if already applied) */
-const autoApplyLabel = async (
-  ticketId: number,
-  labelName: string,
-  color = "#ef4444"
-): Promise<void> => {
-  try {
-    const [label] = await Label.findOrCreate({
-      where: { name: labelName },
-      defaults: { name: labelName, color }
-    });
-    await TicketLabel.findOrCreate({
-      where: { ticketId, labelId: label.id }
-    });
-  } catch (err) {
-    logger.error(err, `autoApplyLabel error: ticketId=${ticketId} label=${labelName}`);
-  }
-};
-
 // ─── Typing simulation for Telegram ──────────────────────────────────────────
 
 const sendWithTyping = async (
@@ -600,11 +581,11 @@ export const startTelegramBot = async (telegramRecord: Telegram): Promise<void> 
   try {
     const bot = new TelegramBot(botToken, { polling: true });
 
-    bot.on("message", async (msg) => {
+    bot.on("message", async (msg: TelegramBot.Message) => {
       await handleTelegramMessage(bot, telegramRecord, msg);
     });
 
-    bot.on("polling_error", (err) => {
+    bot.on("polling_error", (err: Error) => {
       logger.error(err, `Telegram: polling error for bot "${name}" (id=${id})`);
     });
 
