@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import Message from "../../models/Message";
 import { logger } from "../../utils/logger";
 
@@ -17,48 +18,6 @@ export interface TicketImageResult {
 
 const ESCALATION_MARKER = "[ESCALAR]";
 const RESUELTO_MARKER = "[RESUELTO]";
-
-// ─── Ollama client ────────────────────────────────────────────────────────────
-
-const getOllamaBaseUrl = (): string =>
-  (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/+$/, "");
-
-const getOllamaModel = (): string => process.env.OLLAMA_MODEL || "llama3.2";
-
-type OllamaMessage = { role: "system" | "user" | "assistant"; content: string };
-
-interface OllamaChatResult {
-  text: string;
-  evalCount?: number;
-}
-
-const callOllama = async (
-  messages: OllamaMessage[],
-  maxTokens: number
-): Promise<OllamaChatResult> => {
-  const res = await fetch(`${getOllamaBaseUrl()}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: getOllamaModel(),
-      messages,
-      stream: false,
-      options: { num_predict: maxTokens }
-    })
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Ollama request failed (${res.status}): ${body}`);
-  }
-
-  const data = await res.json();
-
-  return {
-    text: data?.message?.content ?? "",
-    evalCount: data?.eval_count
-  };
-};
 
 const buildConversation = (
   messages: Message[]
@@ -80,7 +39,7 @@ const buildConversation = (
     }
   }
 
-  // El modelo espera que la conversación empiece con un mensaje del usuario
+  // Anthropic requires conversation starting with a user message
   const firstUserIdx = pairs.findIndex(m => m.role === "user");
   return firstUserIdx >= 0 ? pairs.slice(firstUserIdx) : [];
 };
@@ -90,6 +49,12 @@ export const getAIResponse = async (
   systemPrompt: string,
   splynxContext?: string
 ): Promise<AIResponse> => {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is not configured");
+  }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
   const messages = await Message.findAll({
     where: { ticketId },
     order: [["createdAt", "ASC"]],
@@ -123,10 +88,22 @@ IMPORTANTE: NO uses ${RESUELTO_MARKER} si el cliente usa tiempo pasado sin confi
 Responde siempre en español, de forma corta y directa.`;
 
   try {
-    const { text, evalCount } = await callOllama(
-      [{ role: "system", content: fullSystem }, ...conversation],
-      300
-    );
+    const result = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      system: [
+        {
+          type: "text",
+          text: fullSystem,
+          // @ts-ignore — cache_control is supported but may not be in older type defs
+          cache_control: { type: "ephemeral" }
+        }
+      ],
+      messages: conversation
+    });
+
+    const text =
+      result.content[0].type === "text" ? result.content[0].text : "";
 
     const trimmed = text.trimStart();
     const shouldEscalate = trimmed.startsWith(ESCALATION_MARKER);
@@ -140,12 +117,12 @@ Responde siempre en español, de forma corta y directa.`;
     }
 
     logger.debug(
-      `AI response for ticket ${ticketId}: shouldEscalate=${shouldEscalate}, shouldResolve=${shouldResolve}, tokens_used=${evalCount}`
+      `AI response for ticket ${ticketId}: shouldEscalate=${shouldEscalate}, shouldResolve=${shouldResolve}, tokens_used=${result.usage?.output_tokens}`
     );
 
     return { response, shouldEscalate, shouldResolve };
   } catch (err) {
-    logger.error(err, "Error calling Ollama AI API");
+    logger.error(err, "Error calling Claude AI API");
     throw err;
   }
 };
@@ -156,6 +133,12 @@ export const getAgentAdvice = async (
   ticketId: number,
   agentQuestion: string
 ): Promise<{ response: string }> => {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is not configured");
+  }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
   const messages = await Message.findAll({
     where: { ticketId },
     order: [["createdAt", "ASC"]],
@@ -190,19 +173,21 @@ Responde con pasos técnicos numerados y concretos para el agente. En español.`
   const userContent = `${conversationSummary}\nPregunta del agente: ${agentQuestion}`;
 
   try {
-    const { text, evalCount } = await callOllama(
-      [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent }
-      ],
-      500
-    );
+    const result = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userContent }]
+    });
 
-    logger.debug(`Agent advice for ticket ${ticketId}: tokens_used=${evalCount}`);
+    const text =
+      result.content[0].type === "text" ? result.content[0].text : "";
+
+    logger.debug(`Agent advice for ticket ${ticketId}: tokens_used=${result.usage?.output_tokens}`);
 
     return { response: text };
   } catch (err) {
-    logger.error(err, "Error calling Ollama AI API for agent advice");
+    logger.error(err, "Error calling Claude AI API for agent advice");
     throw err;
   }
 };
@@ -217,8 +202,11 @@ export interface TicketSummaryResult {
 export const getTicketSummary = async (
   ticketId: number
 ): Promise<TicketSummaryResult | null> => {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+
   try {
     const { Op } = require("sequelize");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     // Only messages from the last 12 hours
     const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
@@ -261,22 +249,22 @@ export const getTicketSummary = async (
       })
       .join("\n");
 
-    const { text } = await callOllama(
-      [
-        {
-          role: "system",
-          content:
-            "Eres un asistente de soporte técnico. Resume en 2-3 líneas el problema que reportó el cliente, la hora en que lo reportó y cómo se resolvió. Sin encabezados ni listas. Directo y conciso. En español."
-        },
+    const result = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 250,
+      system:
+        "Eres un asistente de soporte técnico. Resume en 2-3 líneas el problema que reportó el cliente, la hora en que lo reportó y cómo se resolvió. Sin encabezados ni listas. Directo y conciso. En español.",
+      messages: [
         {
           role: "user",
           content: `Conversación de las últimas 12 horas:\n${conversationText}\n\nResume el caso incluyendo la hora del reporte:`
         }
-      ],
-      250
-    );
+      ]
+    });
 
-    return { summary: text || null, reportTime };
+    const summary =
+      result.content[0].type === "text" ? result.content[0].text : null;
+    return { summary, reportTime };
   } catch (err) {
     logger.error(err, "Error generating ticket summary");
     return null;
