@@ -1,3 +1,4 @@
+import { UniqueConstraintError } from "sequelize";
 import AppError from "../../errors/AppError";
 import Contact from "../../models/Contact";
 
@@ -28,19 +29,28 @@ const CreateContactService = async ({
     throw new AppError("ERR_DUPLICATED_CONTACT");
   }
 
-  const contact = await Contact.create(
-    {
-      name,
-      number,
-      email,
-      extraInfo
-    },
-    {
-      include: ["extraInfo"]
-    }
-  );
+  try {
+    const contact = await Contact.create(
+      {
+        name,
+        number,
+        email,
+        extraInfo
+      },
+      {
+        include: ["extraInfo"]
+      }
+    );
 
-  return contact;
+    return contact;
+  } catch (err) {
+    // Condicion de carrera: dos requests casi simultaneas pasaron el
+    // findOne de arriba antes de que la primera terminara de insertar.
+    if (err instanceof UniqueConstraintError) {
+      throw new AppError("ERR_DUPLICATED_CONTACT");
+    }
+    throw err;
+  }
 };
 
 export default CreateContactService;
