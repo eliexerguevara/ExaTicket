@@ -71,9 +71,33 @@ const mapMessageAck = (wbotAck: any): MessageAck => {
   return ackMap[wbotAck] || 0;
 };
 
+// whatsapp-web.js a veces falla al serializar el mensaje enviado de vuelta
+// (bug conocido de la libreria con el esquema "LID" de WhatsApp) aunque el
+// mensaje si haya salido. En ese caso armamos una respuesta de respaldo con
+// los datos que ya teniamos, en vez de tratarlo como que el envio fallo.
 const convertToProviderMessage = (
-  wbotMessage: WbotMessage
+  wbotMessage: WbotMessage | undefined,
+  fallback?: { to: string; body?: string }
 ): ProviderMessage => {
+  if (!wbotMessage?.id) {
+    logger.warn(
+      { to: fallback?.to },
+      "whatsapp-web.js no devolvio el mensaje enviado (bug LID conocido); usando respuesta de respaldo"
+    );
+    return {
+      id: `fallback-${Date.now()}`,
+      body: fallback?.body || "",
+      fromMe: true,
+      hasMedia: false,
+      type: "chat",
+      timestamp: Math.floor(Date.now() / 1000),
+      from: "",
+      to: fallback?.to || "",
+      hasQuotedMsg: false,
+      ack: 1
+    };
+  }
+
   return {
     id: wbotMessage.id.id,
     body: wbotMessage.body,
@@ -333,7 +357,7 @@ const sendMessage = async (
     linkPreview: options?.linkPreview
   });
 
-  return convertToProviderMessage(sentMessage);
+  return convertToProviderMessage(sentMessage, { to, body });
 };
 
 const sendMedia = async (
@@ -366,7 +390,7 @@ const sendMedia = async (
   }
 
   const sentMessage = await wbot.sendMessage(to, messageMedia, mediaOptions);
-  return convertToProviderMessage(sentMessage);
+  return convertToProviderMessage(sentMessage, { to, body: options?.caption });
 };
 
 const checkNumber = async (
@@ -403,7 +427,7 @@ const fetchChatMessages = async (
   const chat = await wbot.getChatById(chatId);
   const messages = await chat.fetchMessages({ limit });
 
-  return messages.map(convertToProviderMessage);
+  return messages.map(m => convertToProviderMessage(m));
 };
 
 const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
