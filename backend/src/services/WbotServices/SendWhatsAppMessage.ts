@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider, ProviderMessage } from "../../providers/WhatsApp";
+import { logger } from "../../utils/logger";
 
 import formatBody from "../../helpers/Mustache";
 
@@ -37,6 +38,7 @@ const SendWhatsAppMessage = async ({
     await ticket.update({ lastMessage: body });
     return sentMessage;
   } catch (err) {
+    logger.error(err, `SendWhatsAppMessage error (ticket=${ticket.id}, chatId=${chatId})`);
     throw new AppError("ERR_SENDING_WAPP_MSG");
   }
 };
