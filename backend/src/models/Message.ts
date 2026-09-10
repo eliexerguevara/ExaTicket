@@ -37,9 +37,10 @@ class Message extends Model<Message> {
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
-      return `${process.env.BACKEND_URL}:${
-        process.env.PROXY_PORT
-      }/public/${this.getDataValue("mediaUrl")}`;
+      // BACKEND_URL ya trae el puerto (instalacion por IP, ej. http://IP:8080)
+      // o el path del proxy (instalacion con dominio, ej. https://dominio/api)
+      // segun como lo arma install.sh - no hay que agregarle nada mas aca.
+      return `${process.env.BACKEND_URL}/public/${this.getDataValue("mediaUrl")}`;
     }
     return null;
   }
