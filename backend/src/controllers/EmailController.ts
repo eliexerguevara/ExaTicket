@@ -7,6 +7,10 @@ export const testEmail = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  if (req.user.profile !== "superadmin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
   const { smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom, testTo } = req.body;
 
   if (!smtpHost || !smtpUser || !smtpPass || !testTo) {

@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { Redirect } from "react-router-dom";
 import openSocket from "../../services/socket-io";
+
+import { AuthContext } from "../../context/Auth/AuthContext";
 
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
@@ -103,6 +106,7 @@ const useStyles = makeStyles(theme => ({
 
 const Settings = () => {
 	const classes = useStyles();
+	const { user } = useContext(AuthContext);
 
 	const [settings, setSettings] = useState([]);
 	const [aiSystemPrompt, setAiSystemPrompt] = useState("");
@@ -193,6 +197,12 @@ const Settings = () => {
 		});
 		return () => { socket.disconnect(); };
 	}, []);
+
+	// Esta pagina es exclusiva de superadmin: el link ya esta oculto para
+	// admin en el menu (rules.js), esto cubre el caso de entrar por URL directa.
+	if (user.profile !== "superadmin") {
+		return <Redirect to="/tickets" />;
+	}
 
 	const handleChangeSetting = async e => {
 		const { name, value } = e.target;
