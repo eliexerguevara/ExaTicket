@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider } from "../../providers/WhatsApp";
+import GetWhatsappChatId from "../../helpers/GetWhatsappChatId";
 
 const EditWhatsAppMessage = async (
   messageId: string,
@@ -29,7 +30,7 @@ const EditWhatsAppMessage = async (
 
   if (ticket?.whatsappId) {
     try {
-      const chatId = `${ticket.contact.number}@${ticket.isGroup ? "g" : "c"}.us`;
+      const chatId = GetWhatsappChatId(ticket);
       await whatsappProvider.editMessage(
         ticket.whatsappId,
         chatId,

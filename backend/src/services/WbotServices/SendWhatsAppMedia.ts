@@ -5,6 +5,7 @@ import { whatsappProvider, ProviderMessage } from "../../providers/WhatsApp";
 import { logger } from "../../utils/logger";
 
 import formatBody from "../../helpers/Mustache";
+import GetWhatsappChatId from "../../helpers/GetWhatsappChatId";
 
 interface Request {
   media: Express.Multer.File;
@@ -22,7 +23,7 @@ const SendWhatsAppMedia = async ({
       throw new AppError("ERR_TICKET_NO_WHATSAPP");
     }
 
-    const chatId = `${ticket.contact.number}@${ticket.isGroup ? "g" : "c"}.us`;
+    const chatId = GetWhatsappChatId(ticket);
 
     const hasBody = body
       ? formatBody(body as string, ticket.contact)

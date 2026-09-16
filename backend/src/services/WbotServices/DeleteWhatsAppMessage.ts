@@ -2,6 +2,7 @@ import AppError from "../../errors/AppError";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider } from "../../providers/WhatsApp";
+import GetWhatsappChatId from "../../helpers/GetWhatsappChatId";
 
 /**
  * scope = "me"       → mark deleted in DB only (client keeps the message on their phone)
@@ -28,7 +29,7 @@ const DeleteWhatsAppMessage = async (
   if (scope === "everyone" && message.ticket?.whatsappId) {
     try {
       const { ticket } = message;
-      const chatId = `${ticket.contact.number}@${ticket.isGroup ? "g" : "c"}.us`;
+      const chatId = GetWhatsappChatId(ticket);
       await whatsappProvider.deleteMessage(
         ticket.whatsappId,
         chatId,
