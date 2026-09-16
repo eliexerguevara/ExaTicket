@@ -16,6 +16,23 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(settings);
 };
 
+// Subconjunto de settings sin secretos (API keys, contraseñas), seguro para
+// cualquier usuario autenticado: solo para saber si mostrar el boton de
+// Splynx/UISP en el ticket, sin exponer el resto de la configuracion.
+export const crmStatus = async (
+  _req: Request,
+  res: Response
+): Promise<Response> => {
+  const settings = await ListSettingsService();
+  const find = (key: string): string =>
+    settings?.find(s => s.key === key)?.value || "";
+
+  return res.status(200).json({
+    uispEnabled: find("uispEnabled") === "enabled",
+    splynxEnabled: find("splynxEnabled") === "enabled"
+  });
+};
+
 export const update = async (
   req: Request,
   res: Response

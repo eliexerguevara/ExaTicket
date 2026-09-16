@@ -46,11 +46,10 @@ const TicketActionButtons = ({ ticket }) => {
 	useEffect(() => {
 		const fetchCRMSettings = async () => {
 			try {
-				const { data } = await api.get("/settings");
-				const find = key => (data.find(s => s.key === key) || {}).value || "";
-				if (find("uispEnabled") === "enabled") {
+				const { data } = await api.get("/settings/crm-status");
+				if (data.uispEnabled) {
 					setActiveCRM("uisp");
-				} else if (find("splynxEnabled") === "enabled") {
+				} else if (data.splynxEnabled) {
 					setActiveCRM("splynx");
 				} else {
 					setActiveCRM(null);

@@ -9,6 +9,7 @@ import * as EmailController from "../controllers/EmailController";
 const settingRoutes = Router();
 
 settingRoutes.get("/settings", isAuth, SettingController.index);
+settingRoutes.get("/settings/crm-status", isAuth, SettingController.crmStatus);
 
 // change setting key to key in future
 settingRoutes.put("/settings/:settingKey", isAuth, SettingController.update);
