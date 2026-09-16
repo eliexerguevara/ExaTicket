@@ -404,12 +404,17 @@ const getMessageBody = (msg: WAMessage): string => {
       const location = msg.message?.locationMessage;
       if (!location) return "";
 
-      const gmapsUrl = `https://maps.google.com/maps?q=${location.degreesLatitude}%2C${location.degreesLongitude}&z=17&hl=pt-BR`;
+      const { degreesLatitude: lat, degreesLongitude: lon } = location;
+      const gmapsUrl = `https://maps.google.com/maps?q=${lat}%2C${lon}&z=17&hl=pt-BR`;
       const description =
-        location.name ||
-        `${location.degreesLatitude}, ${location.degreesLongitude}`;
+        location.name || `${lat}, ${lon}`;
+      // Miniatura del mapa (OpenStreetMap, sin necesidad de API key). El
+      // frontend (LocationPreview) espera "imagen|link|descripcion".
+      const mapImageUrl =
+        `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}` +
+        `&zoom=15&size=300x200&maptype=mapnik&markers=${lat},${lon},red-pushpin`;
 
-      return `${gmapsUrl}|${description}`;
+      return `${mapImageUrl}|${gmapsUrl}|${description}`;
     }
 
     return "";
