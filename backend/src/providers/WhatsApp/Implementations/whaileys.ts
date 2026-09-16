@@ -1033,8 +1033,35 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       });
     });
 
+    // Identidad propia de la cuenta (numero real + LID). Un chat "Mensaje
+    // para ti mismo" (o un eco de sincronizacion de la propia cuenta) tiene
+    // remoteJid == nuestra propia identidad - eso nunca es un cliente real,
+    // y procesarlo crea un contacto/ticket fantasma al que el bot termina
+    // mandandose su propio mensaje de bienvenida.
+    const ownJids = new Set(
+      [wbot.user?.id, wbot.user?.lid]
+        .filter((v): v is string => Boolean(v))
+        .map(v => {
+          try {
+            return jidNormalizedUser(v);
+          } catch {
+            return v;
+          }
+        })
+    );
+
     const validMessages = messages.filter(msg => {
       if (!msg.message || !shouldHandleMessage(msg)) return false;
+
+      if (msg.key.remoteJid) {
+        let remote = msg.key.remoteJid;
+        try {
+          remote = jidNormalizedUser(remote);
+        } catch {
+          /* keep raw value */
+        }
+        if (ownJids.has(remote)) return false;
+      }
 
       if (type === "notify") return true;
 
