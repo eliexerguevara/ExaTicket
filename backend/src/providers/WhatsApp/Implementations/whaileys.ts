@@ -1520,15 +1520,23 @@ const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
 
   if (wbot.store?.contacts) {
     Object.values(wbot.store.contacts).forEach(contact => {
-      if (contact.id && isJidUser(contact.id)) {
-        contacts.push({
-          id: contact.id,
-          number: jidNormalizedUser(contact.id).replace("@s.whatsapp.net", ""),
-          name: contact.name || contact.notify || "",
-          pushname: contact.notify || "",
-          isGroup: false
-        });
-      }
+      if (!contact.id || !isJidUser(contact.id)) return;
+
+      const number = jidNormalizedUser(contact.id).replace("@s.whatsapp.net", "");
+
+      // Un numero de telefono real (formato E.164) no pasa de 15 digitos.
+      // Entradas mas largas que eso son basura de sincronizacion (IDs de
+      // grupo, LIDs mal etiquetados) que no corresponden a ningun contacto
+      // real y no sirven para importar.
+      if (!/^\d{1,15}$/.test(number)) return;
+
+      contacts.push({
+        id: contact.id,
+        number,
+        name: contact.name || contact.notify || "",
+        pushname: contact.notify || "",
+        isGroup: false
+      });
     });
   }
 
