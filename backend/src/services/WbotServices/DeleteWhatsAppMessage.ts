@@ -3,6 +3,12 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider } from "../../providers/WhatsApp";
 import GetWhatsappChatId from "../../helpers/GetWhatsappChatId";
+import EnsureTicketAccess from "../../helpers/EnsureTicketAccess";
+
+interface RequestingUser {
+  id: string | number;
+  profile: string;
+}
 
 /**
  * scope = "me"       → mark deleted in DB only (client keeps the message on their phone)
@@ -10,7 +16,8 @@ import GetWhatsappChatId from "../../helpers/GetWhatsappChatId";
  */
 const DeleteWhatsAppMessage = async (
   messageId: string,
-  scope: "me" | "everyone" = "everyone"
+  scope: "me" | "everyone" = "everyone",
+  requestingUser?: RequestingUser
 ): Promise<Message> => {
   const message = await Message.findByPk(messageId, {
     include: [
@@ -24,6 +31,10 @@ const DeleteWhatsAppMessage = async (
 
   if (!message) {
     throw new AppError("No message found with this ID.");
+  }
+
+  if (requestingUser && message.ticket) {
+    await EnsureTicketAccess(message.ticket, requestingUser);
   }
 
   if (scope === "everyone" && message.ticket?.whatsappId) {

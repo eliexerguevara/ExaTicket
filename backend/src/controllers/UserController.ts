@@ -15,6 +15,22 @@ type IndexQuery = {
   pageNumber: string;
 };
 
+const VALID_PROFILES = ["user", "admin", "superadmin"];
+
+// Solo superadmin puede otorgar el perfil superadmin (a otros o a si mismo).
+// Sin esto, cualquier admin podria autopromoverse via este mismo endpoint.
+const ensureCanAssignProfile = (
+  requestedProfile: string,
+  requestingUserProfile: string
+): void => {
+  if (!VALID_PROFILES.includes(requestedProfile)) {
+    throw new AppError("ERR_INVALID_PROFILE", 400);
+  }
+  if (requestedProfile === "superadmin" && requestingUserProfile !== "superadmin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+};
+
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber } = req.query as IndexQuery;
 
@@ -43,6 +59,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   // Never trust the client-supplied profile on public signup
   const profile = isSignup ? "user" : (req.body.profile ?? "user");
+
+  if (!isSignup) {
+    ensureCanAssignProfile(profile, req.user.profile);
+  }
 
   const user = await CreateUserService({
     email,
@@ -80,6 +100,10 @@ export const update = async (
 
   const { userId } = req.params;
   const userData = req.body;
+
+  if (userData.profile) {
+    ensureCanAssignProfile(userData.profile, req.user.profile);
+  }
 
   const user = await UpdateUserService({ userData, userId });
 

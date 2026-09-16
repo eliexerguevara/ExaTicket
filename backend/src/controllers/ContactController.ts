@@ -152,6 +152,13 @@ export const remove = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  // Borrar contactos es accion de admin/superadmin (rules.js:
+  // "contacts-page:deleteContact"), el boton ya estaba oculto para "user"
+  // en la interfaz pero el backend no lo exigia.
+  if (req.user.profile !== "admin" && req.user.profile !== "superadmin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
   const { contactId } = req.params;
 
   await DeleteContactService(contactId);

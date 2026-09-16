@@ -3,10 +3,17 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider } from "../../providers/WhatsApp";
 import GetWhatsappChatId from "../../helpers/GetWhatsappChatId";
+import EnsureTicketAccess from "../../helpers/EnsureTicketAccess";
+
+interface RequestingUser {
+  id: string | number;
+  profile: string;
+}
 
 const EditWhatsAppMessage = async (
   messageId: string,
-  newBody: string
+  newBody: string,
+  requestingUser?: RequestingUser
 ): Promise<Message> => {
   const message = await Message.findByPk(messageId, {
     include: [
@@ -27,6 +34,10 @@ const EditWhatsAppMessage = async (
   }
 
   const { ticket } = message;
+
+  if (requestingUser && ticket) {
+    await EnsureTicketAccess(ticket, requestingUser);
+  }
 
   if (ticket?.whatsappId) {
     try {

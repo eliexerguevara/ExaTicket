@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { Request, Response } from "express";
 
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
+import EnsureTicketAccess from "../helpers/EnsureTicketAccess";
 import { getIO } from "../libs/socket";
 import Message from "../models/Message";
 
@@ -36,6 +37,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     ticketId
   });
 
+  await EnsureTicketAccess(ticket, req.user);
+
   SetTicketMessagesAsRead(ticket);
 
   return res.json({ count, messages, ticket, hasMore });
@@ -47,6 +50,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const medias = req.files as Express.Multer.File[];
 
   const ticket = await ShowTicketService(ticketId);
+
+  await EnsureTicketAccess(ticket, req.user);
 
   SetTicketMessagesAsRead(ticket);
 
@@ -101,7 +106,7 @@ export const remove = async (
   // ?scope=me → local delete only | ?scope=everyone (default) → delete on WhatsApp too
   const scope = (req.query.scope as string) === "me" ? "me" : "everyone";
 
-  const message = await DeleteWhatsAppMessage(messageId, scope);
+  const message = await DeleteWhatsAppMessage(messageId, scope, req.user);
 
   const io = getIO();
   io.to(message.ticketId.toString()).emit("appMessage", {
@@ -123,7 +128,7 @@ export const edit = async (
     return res.status(400).json({ error: "body is required" });
   }
 
-  const message = await EditWhatsAppMessage(messageId, newBody.trim());
+  const message = await EditWhatsAppMessage(messageId, newBody.trim(), req.user);
 
   const io = getIO();
   io.to(message.ticketId.toString()).emit("appMessage", {
@@ -146,6 +151,9 @@ export const agentAsk = async (
   if (!question || !question.trim()) {
     return res.status(400).json({ error: "La pregunta no puede estar vacía" });
   }
+
+  const ticket = await ShowTicketService(ticketId);
+  await EnsureTicketAccess(ticket, req.user);
 
   try {
     const { response } = await getAgentAdvice(Number(ticketId), question.trim());

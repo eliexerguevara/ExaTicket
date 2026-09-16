@@ -72,6 +72,17 @@ class Whatsapp extends Model<Whatsapp> {
 
   @HasMany(() => WhatsappQueue)
   whatsappQueues: WhatsappQueue[];
+
+  // "session" son las credenciales de autenticacion de whatsapp-web.js/Baileys
+  // (equivalente a poder clonar la sesion sin escanear ningun QR). Nunca debe
+  // salir del backend: ni por respuesta de API ni por evento de socket.io.
+  // Sobreescribir toJSON() lo saca de raiz en todos los puntos donde el
+  // modelo se serializa (res.json, io.emit(model), etc).
+  toJSON(): object {
+    const values = { ...this.get() } as Record<string, unknown>;
+    delete values.session;
+    return values;
+  }
 }
 
 export default Whatsapp;

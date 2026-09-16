@@ -1,10 +1,19 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import AppError from "../errors/AppError";
 import CreateQueueService from "../services/QueueService/CreateQueueService";
 import DeleteQueueService from "../services/QueueService/DeleteQueueService";
 import ListQueuesService from "../services/QueueService/ListQueuesService";
 import ShowQueueService from "../services/QueueService/ShowQueueService";
 import UpdateQueueService from "../services/QueueService/UpdateQueueService";
+
+// Crear/editar/borrar colas es una accion de administracion - solo la ve
+// admin/superadmin en el menu, el backend debe exigir lo mismo.
+const ensureQueuesAdmin = (req: Request): void => {
+  if (req.user.profile !== "admin" && req.user.profile !== "superadmin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+};
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const queues = await ListQueuesService();
@@ -13,6 +22,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
+  ensureQueuesAdmin(req);
+
   const { name, color, greetingMessage } = req.body;
 
   const queue = await CreateQueueService({ name, color, greetingMessage });
@@ -38,6 +49,8 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  ensureQueuesAdmin(req);
+
   const { queueId } = req.params;
 
   const queue = await UpdateQueueService(queueId, req.body);
@@ -55,6 +68,8 @@ export const remove = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  ensureQueuesAdmin(req);
+
   const { queueId } = req.params;
 
   await DeleteQueueService(queueId);

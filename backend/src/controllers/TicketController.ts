@@ -9,6 +9,8 @@ import UpdateTicketService from "../services/TicketServices/UpdateTicketService"
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import formatBody from "../helpers/Mustache";
+import EnsureTicketAccess from "../helpers/EnsureTicketAccess";
+import AppError from "../errors/AppError";
 import { logger } from "../utils/logger";
 
 type IndexQuery = {
@@ -49,12 +51,17 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     queueIds = JSON.parse(queueIdsStringified);
   }
 
+  // showAll quita el filtro por usuario/cola - solo admin/superadmin pueden
+  // usarlo, sin importar lo que venga en el query string.
+  const canShowAll =
+    req.user.profile === "admin" || req.user.profile === "superadmin";
+
   const { tickets, count, hasMore } = await ListTicketsService({
     searchParam,
     pageNumber,
     status,
     date,
-    showAll,
+    showAll: canShowAll ? showAll : "false",
     userId,
     queueIds,
     withUnreadMessages,
@@ -82,6 +89,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
 
   const contact = await ShowTicketService(ticketId);
+  await EnsureTicketAccess(contact, req.user);
 
   return res.status(200).json(contact);
 };
@@ -92,6 +100,9 @@ export const update = async (
 ): Promise<Response> => {
   const { ticketId } = req.params;
   const ticketData: TicketData = req.body;
+
+  const existingTicket = await ShowTicketService(ticketId);
+  await EnsureTicketAccess(existingTicket, req.user);
 
   const { ticket } = await UpdateTicketService({
     ticketData,
@@ -122,6 +133,12 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { ticketId } = req.params;
+
+  // Borrar tickets es accion de admin/superadmin (ver rules.js:
+  // "ticket-options:deleteTicket"), no solo de quien tiene el ticket asignado.
+  if (req.user.profile !== "admin" && req.user.profile !== "superadmin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
   const ticket = await DeleteTicketService(ticketId);
 

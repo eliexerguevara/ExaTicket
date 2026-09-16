@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
+import AppError from "../errors/AppError";
 
 import CreateWhatsAppService from "../services/WhatsappService/CreateWhatsAppService";
 import DeleteWhatsAppService from "../services/WhatsappService/DeleteWhatsAppService";
@@ -24,7 +25,15 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(whatsapps);
 };
 
+const ensureConnectionsAdmin = (req: Request): void => {
+  if (req.user.profile !== "admin" && req.user.profile !== "superadmin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+};
+
 export const store = async (req: Request, res: Response): Promise<Response> => {
+  ensureConnectionsAdmin(req);
+
   const {
     name,
     status,
@@ -73,6 +82,8 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  ensureConnectionsAdmin(req);
+
   const { whatsappId } = req.params;
   const whatsappData = req.body;
 
@@ -101,6 +112,8 @@ export const remove = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
+  ensureConnectionsAdmin(req);
+
   const { whatsappId } = req.params;
 
   await DeleteWhatsAppService(whatsappId);

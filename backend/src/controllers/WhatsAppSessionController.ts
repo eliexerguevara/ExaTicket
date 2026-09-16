@@ -6,8 +6,20 @@ import UpdateWhatsAppService from "../services/WhatsappService/UpdateWhatsAppSer
 import { requestPairingCode, hasSession } from "../providers/WhatsApp/Implementations/whaileys";
 import { sleep } from "../utils/sleep";
 import { logger } from "../utils/logger";
+import AppError from "../errors/AppError";
+
+// Iniciar/reiniciar/desconectar la sesion o vincular un nuevo telefono son
+// acciones de admin/superadmin - la pagina de Conexiones ya esta oculta para
+// "user" en el menu, esto hace que el backend lo exija tambien.
+const ensureConnectionsAdmin = (req: Request): void => {
+  if (req.user.profile !== "admin" && req.user.profile !== "superadmin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+};
 
 const store = async (req: Request, res: Response): Promise<Response> => {
+  ensureConnectionsAdmin(req);
+
   const { whatsappId } = req.params;
   const whatsapp = await ShowWhatsAppService(whatsappId);
 
@@ -17,6 +29,8 @@ const store = async (req: Request, res: Response): Promise<Response> => {
 };
 
 const update = async (req: Request, res: Response): Promise<Response> => {
+  ensureConnectionsAdmin(req);
+
   const { whatsappId } = req.params;
 
   const { whatsapp } = await UpdateWhatsAppService({
@@ -30,6 +44,8 @@ const update = async (req: Request, res: Response): Promise<Response> => {
 };
 
 const remove = async (req: Request, res: Response): Promise<Response> => {
+  ensureConnectionsAdmin(req);
+
   const { whatsappId } = req.params;
   const whatsapp = await ShowWhatsAppService(whatsappId);
 
@@ -39,6 +55,8 @@ const remove = async (req: Request, res: Response): Promise<Response> => {
 };
 
 const pairingCode = async (req: Request, res: Response): Promise<Response> => {
+  ensureConnectionsAdmin(req);
+
   const { whatsappId } = req.params;
   const { phoneNumber } = req.body;
 
