@@ -1153,18 +1153,53 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       if (shouldReconnect) {
         await flushPendingCredsSave(sessionId);
 
-        await whatsapp.update({ status: "OPENING" });
+        const retries = (whatsapp.retries || 0) + 1;
+
+        // Sin esto reintentaba cada 3s para siempre sin importar cuantas
+        // veces fallara, lo cual puede hacer que WhatsApp empiece a
+        // bloquear/ignorar los intentos de conexion. Backoff exponencial
+        // (max 60s) y despues de MAX_RECONNECT_ATTEMPTS paramos de
+        // reintentar solos - queda en DISCONNECTED para que alguien lo
+        // reconecte manualmente desde la pagina de Conexiones.
+        const MAX_RECONNECT_ATTEMPTS = 15;
+
+        if (retries > MAX_RECONNECT_ATTEMPTS) {
+          logger.error({
+            info: `Giving up after ${retries} failed reconnect attempts, marking as disconnected`,
+            sessionId,
+            statusCode
+          });
+
+          await whatsapp.update({ status: "DISCONNECTED", retries: 0 });
+
+          const updatedWhatsapp = await Whatsapp.findByPk(sessionId);
+          if (updatedWhatsapp) {
+            io.emit("whatsappSession", {
+              action: "update",
+              session: updatedWhatsapp
+            });
+          }
+
+          await removeSession(sessionId);
+          return;
+        }
+
+        await whatsapp.update({ status: "OPENING", retries });
         io.emit("whatsappSession", {
           action: "update",
           session: whatsapp
         });
+
+        const backoffMs = Math.min(3000 * 2 ** Math.min(retries - 1, 5), 60000);
         logger.info({
           info: "Connection closed, reconnecting...",
           sessionId,
-          statusCode
+          statusCode,
+          attempt: retries,
+          backoffMs
         });
 
-        await sleep(3000);
+        await sleep(backoffMs);
         init(whatsapp);
       }
     }
