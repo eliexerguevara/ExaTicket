@@ -178,7 +178,11 @@ npx sequelize db:migrate
 npx sequelize db:seed:all || true
 
 pm2 delete exaticket-backend 2>/dev/null || true
-pm2 start dist/server.js --name exaticket-backend
+# --dns-result-order=ipv4first: muchos VPS traen IPv6 "asignado" pero sin
+# salida real a internet (routing roto del proveedor). Sin esto, Node
+# intenta conectar por IPv6 primero a WhatsApp/Telegram, se cuelga, y
+# termina en timeouts intermitentes dificiles de diagnosticar.
+pm2 start dist/server.js --name exaticket-backend --node-args="--dns-result-order=ipv4first"
 pm2 save
 
 # ───────────────────────────── 9. Frontend ─────────────────────────────
