@@ -3,20 +3,21 @@ import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 import SearchIcon from "@material-ui/icons/Search";
 import InputBase from "@material-ui/core/InputBase";
-import Tabs from "@material-ui/core/Tabs";
-import Tab from "@material-ui/core/Tab";
-import Badge from "@material-ui/core/Badge";
-import MoveToInboxIcon from "@material-ui/icons/MoveToInbox";
-import CheckBoxIcon from "@material-ui/icons/CheckBox";
-import GroupIcon from "@material-ui/icons/Group";
+import MoveToInboxOutlinedIcon from "@material-ui/icons/MoveToInboxOutlined";
+import CheckCircleOutlineIcon from "@material-ui/icons/CheckCircleOutline";
+import AccountTreeOutlinedIcon from "@material-ui/icons/AccountTreeOutlined";
+import AddIcon from "@material-ui/icons/Add";
+import FilterListIcon from "@material-ui/icons/FilterList";
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
+import Menu from "@material-ui/core/Menu";
+import MenuItem from "@material-ui/core/MenuItem";
 import NewTicketModal from "../NewTicketModal";
 import TicketsList from "../TicketsList";
 import TabPanel from "../TabPanel";
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../Can";
+import rules from "../../rules";
 import TicketsQueueSelect from "../TicketsQueueSelect";
 import { Button } from "@material-ui/core";
 
@@ -32,36 +33,85 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.palette.background.default,
     color: theme.palette.text.primary,
   },
-  tabsHeader: {
+  listHead: {
     flex: "none",
     backgroundColor: theme.palette.background.paper,
+    padding: "14px 14px 12px",
+    borderBottom: `1px solid ${theme.palette.type === "dark" ? "#2a3942" : "rgba(0,0,0,0.08)"}`,
   },
-  settingsIcon: {
-    alignSelf: "center",
+  pillTabsRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  pillTab: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    padding: "7px 12px",
+    borderRadius: 10,
+    color: theme.palette.text.secondary,
+    cursor: "pointer",
+    userSelect: "none",
+    border: `1px solid ${theme.palette.type === "dark" ? "#2a3942" : "rgba(0,0,0,0.1)"}`,
+    background: theme.palette.background.paper,
+  },
+  pillTabActive: {
+    background: theme.palette.type === "dark" ? theme.palette.primary.main : "#e9f1fd",
+    borderColor: theme.palette.primary.main,
+    color: theme.palette.type === "dark" ? "#ffffff" : theme.palette.primary.main,
+  },
+  pillCount: {
+    background: "#1c2333",
+    color: "#fff",
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    minWidth: 18,
+    height: 18,
+    padding: "0 5px",
+    borderRadius: 20,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  newBtn: {
     marginLeft: "auto",
-    padding: 8,
-  },
-  tab: {
-    minWidth: 90,
-    width: 90,
+    borderRadius: 10,
+    textTransform: "none",
+    fontWeight: 700,
+    boxShadow: "none",
   },
   ticketOptionsBox: {
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    background: theme.palette.background.paper,
-    padding: theme.spacing(1),
+    gap: 8,
+    marginTop: 10,
+  },
+  queueSelect: {
+    flex: 1,
+    minWidth: 0,
+  },
+  filtersBtn: {
+    flexShrink: 0,
+    borderRadius: 10,
+    textTransform: "none",
+    fontWeight: 600,
+    color: theme.palette.text.secondary,
+    borderColor: theme.palette.type === "dark" ? "#2a3942" : "rgba(0,0,0,0.15)",
   },
   serachInputWrapper: {
-    flex: 1,
-    background: theme.palette.background.default,
+    background: theme.palette.type === "dark" ? "#2a3942" : "#f1f3f6",
     display: "flex",
-    borderRadius: 40,
-    padding: 4,
-    marginRight: theme.spacing(1),
+    alignItems: "center",
+    borderRadius: 12,
+    padding: "2px 6px",
+    marginBottom: 12,
   },
   searchIcon: {
-    color: "grey",
+    color: theme.palette.text.secondary,
     marginLeft: 6,
     marginRight: 6,
     alignSelf: "center",
@@ -69,9 +119,9 @@ const useStyles = makeStyles((theme) => ({
   searchInput: {
     flex: 1,
     border: "none",
-    borderRadius: 30,
-    color: theme.palette.text.primary, 
-    backgroundColor: theme.palette.background.default,
+    borderRadius: 10,
+    color: theme.palette.text.primary,
+    backgroundColor: "transparent",
   },
   badge: {
     right: "-10px",
@@ -97,6 +147,10 @@ const TicketsManager = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const userQueueIds = user.queues.map((q) => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
+  const [filtersAnchorEl, setFiltersAnchorEl] = useState(null);
+  const canShowAll = rules[user.profile]?.static?.includes(
+    "tickets-manager:showall"
+  );
 
   useEffect(() => {
     if (user.profile.toUpperCase() === "ADMIN") {
@@ -104,13 +158,6 @@ const TicketsManager = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (tab === "search") {
-      searchInputRef.current.focus();
-      setSearchParam("");
-    }
-  }, [tab]);
 
   let searchTimeout;
 
@@ -127,6 +174,7 @@ const TicketsManager = () => {
 
     searchTimeout = setTimeout(() => {
       setSearchParam(searchedTerm);
+      setTab("search");
     }, 500);
   };
 
@@ -150,69 +198,81 @@ const TicketsManager = () => {
         modalOpen={newTicketModalOpen}
         onClose={(e) => setNewTicketModalOpen(false)}
       />
-      <Paper elevation={0} square className={classes.tabsHeader}>
-        <Tabs
-          value={tab}
-          onChange={handleChangeTab}
-          variant="fullWidth"
-          indicatorColor="primary"
-          textColor="primary"
-          aria-label="icon label tabs example"
-        >
-          <Tab
-            value={"open"}
-            icon={<MoveToInboxIcon />}
-            label={i18n.t("tickets.tabs.open.title")}
-            classes={{ root: classes.tab }}
+      <Paper elevation={0} square className={classes.listHead}>
+        <div className={classes.serachInputWrapper}>
+          <SearchIcon className={classes.searchIcon} />
+          <InputBase
+            className={classes.searchInput}
+            inputRef={searchInputRef}
+            placeholder={i18n.t("tickets.search.placeholder")}
+            type="search"
+            onChange={handleSearch}
           />
-          <Tab
-            value={"groups"}
-            icon={<GroupIcon />}
-            label={i18n.t("tickets.tabs.groups.title")}
-            classes={{ root: classes.tab }}
+        </div>
+        <div className={classes.pillTabsRow}>
+          <button
+            type="button"
+            className={`${classes.pillTab} ${tab === "open" ? classes.pillTabActive : ""}`}
+            onClick={(e) => handleChangeTab(e, "open")}
+          >
+            <MoveToInboxOutlinedIcon style={{ fontSize: 16 }} />
+            {i18n.t("tickets.tabs.open.title")}
+            {openCount + pendingCount > 0 && (
+              <span className={classes.pillCount}>{openCount + pendingCount}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`${classes.pillTab} ${tab === "groups" ? classes.pillTabActive : ""}`}
+            onClick={(e) => handleChangeTab(e, "groups")}
+          >
+            <AccountTreeOutlinedIcon style={{ fontSize: 16 }} />
+            {i18n.t("tickets.tabs.groups.title")}
+          </button>
+          <button
+            type="button"
+            className={`${classes.pillTab} ${tab === "closed" ? classes.pillTabActive : ""}`}
+            onClick={(e) => handleChangeTab(e, "closed")}
+          >
+            <CheckCircleOutlineIcon style={{ fontSize: 16 }} />
+            {i18n.t("tickets.tabs.closed.title")}
+          </button>
+          <Button
+            variant="contained"
+            color="primary"
+            size="small"
+            startIcon={<AddIcon />}
+            className={classes.newBtn}
+            onClick={() => setNewTicketModalOpen(true)}
+          >
+            {i18n.t("ticketsManager.buttons.newTicket")}
+          </Button>
+        </div>
+        <div className={classes.ticketOptionsBox}>
+          <TicketsQueueSelect
+            className={classes.queueSelect}
+            selectedQueueIds={selectedQueueIds}
+            userQueues={user?.queues}
+            onChange={(values) => setSelectedQueueIds(values)}
           />
-          <Tab
-            value={"closed"}
-            icon={<CheckBoxIcon />}
-            label={i18n.t("tickets.tabs.closed.title")}
-            classes={{ root: classes.tab }}
-          />
-          <Tab
-            value={"search"}
-            icon={<SearchIcon />}
-            label={i18n.t("tickets.tabs.search.title")}
-            classes={{ root: classes.tab }}
-          />
-        </Tabs>
-      </Paper>
-      <Paper square elevation={0} className={classes.ticketOptionsBox}>
-        {tab === "search" ? (
-          <div className={classes.serachInputWrapper}>
-            <SearchIcon className={classes.searchIcon} />
-            <InputBase
-              className={classes.searchInput}
-              inputRef={searchInputRef}
-              placeholder={i18n.t("tickets.search.placeholder")}
-              type="search"
-              onChange={handleSearch}
-            />
-          </div>
-        ) : (
-          <>
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={() => setNewTicketModalOpen(true)}
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FilterListIcon style={{ fontSize: 16 }} />}
+            className={classes.filtersBtn}
+            onClick={(e) => setFiltersAnchorEl(e.currentTarget)}
+          >
+            {i18n.t("tickets.buttons.moreFilters")}
+          </Button>
+          {canShowAll && (
+            <Menu
+              anchorEl={filtersAnchorEl}
+              open={Boolean(filtersAnchorEl)}
+              onClose={() => setFiltersAnchorEl(null)}
             >
-              {i18n.t("ticketsManager.buttons.newTicket")}
-            </Button>
-            <Can
-              role={user.profile}
-              perform="tickets-manager:showall"
-              yes={() => (
+              <MenuItem>
                 <FormControlLabel
                   label={i18n.t("tickets.buttons.showAll")}
-                  labelPlacement="start"
                   control={
                     <Switch
                       size="small"
@@ -225,51 +285,35 @@ const TicketsManager = () => {
                     />
                   }
                 />
-              )}
-            />
-          </>
-        )}
-        <TicketsQueueSelect
-          style={{ marginLeft: 6 }}
-          selectedQueueIds={selectedQueueIds}
-          userQueues={user?.queues}
-          onChange={(values) => setSelectedQueueIds(values)}
-        />
+              </MenuItem>
+            </Menu>
+          )}
+        </div>
       </Paper>
       {/* ── ABIERTOS ───────────────────────────────────────── */}
       <TabPanel value={tab} name="open" className={classes.ticketsWrapper}>
-        <Tabs
-          value={tabOpen}
-          onChange={handleChangeTabOpen}
-          indicatorColor="primary"
-          textColor="primary"
-          variant="fullWidth"
-        >
-          <Tab
-            label={
-              <Badge
-                className={classes.badge}
-                badgeContent={openCount}
-                color="primary"
-              >
-                {i18n.t("ticketsList.assignedHeader")}
-              </Badge>
-            }
-            value={"open"}
-          />
-          <Tab
-            label={
-              <Badge
-                className={classes.badge}
-                badgeContent={pendingCount}
-                color="secondary"
-              >
-                {i18n.t("ticketsList.pendingHeader")}
-              </Badge>
-            }
-            value={"pending"}
-          />
-        </Tabs>
+        <div className={classes.pillTabsRow} style={{ padding: "8px 12px", borderBottom: "1px solid rgba(128,128,128,0.15)" }}>
+          <button
+            type="button"
+            className={`${classes.pillTab} ${tabOpen === "open" ? classes.pillTabActive : ""}`}
+            onClick={(e) => handleChangeTabOpen(e, "open")}
+          >
+            {i18n.t("ticketsList.assignedHeader")}
+            {openCount > 0 && <span className={classes.pillCount}>{openCount}</span>}
+          </button>
+          <button
+            type="button"
+            className={`${classes.pillTab} ${tabOpen === "pending" ? classes.pillTabActive : ""}`}
+            onClick={(e) => handleChangeTabOpen(e, "pending")}
+          >
+            {i18n.t("ticketsList.pendingHeader")}
+            {pendingCount > 0 && (
+              <span className={classes.pillCount} style={{ background: "#e5484d" }}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        </div>
         <Paper className={classes.ticketsWrapper}>
           <TicketsList
             status="open"

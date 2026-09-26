@@ -1,5 +1,4 @@
 import React, { useState, useContext, useEffect } from "react";
-import clsx from "clsx";
 import {
   makeStyles,
   Drawer,
@@ -14,7 +13,6 @@ import {
   Typography,
 } from "@material-ui/core";
 import MenuIcon from "@material-ui/icons/Menu";
-import ChevronLeftIcon from "@material-ui/icons/ChevronLeft";
 import AccountCircle from "@material-ui/icons/AccountCircle";
 import Brightness4Icon from "@material-ui/icons/Brightness4";
 import logo from "../assets/logo.png";
@@ -27,7 +25,7 @@ import BackdropLoading from "../components/BackdropLoading";
 import { i18n } from "../translate/i18n";
 import { useThemeContext } from "../context/DarkMode";
 
-const drawerWidth = 240;
+const railWidth = 72;
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -38,37 +36,31 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   toolbar: {
-    paddingRight: 24, // keep right padding when drawer closed
+    paddingRight: 24,
   },
   toolbarIcon: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "flex-end",
-    padding: "0 8px",
+    justifyContent: "center",
+    padding: "12px 0",
     minHeight: "48px",
   },
   appBar: {
     zIndex: theme.zIndex.drawer + 1,
-    transition: theme.transitions.create(["width", "margin"], {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.leavingScreen,
-    }),
     backgroundColor: theme.palette.background.default,
-  },
-  appBarShift: {
-    marginLeft: drawerWidth,
-    width: `calc(100% - ${drawerWidth}px)`,
-    transition: theme.transitions.create(["width", "margin"], {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
+    marginLeft: railWidth,
+    width: `calc(100% - ${railWidth}px)`,
+    [theme.breakpoints.down("sm")]: {
+      marginLeft: 0,
+      width: "100%",
+    },
   },
   menuButton: {
-    marginRight: 36,
+    marginRight: 16,
     color: theme.palette.text.primary,
-  },
-  menuButtonHidden: {
-    display: "none",
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
+    },
   },
   titleWrapper: {
     flexGrow: 1,
@@ -77,7 +69,7 @@ const useStyles = makeStyles((theme) => ({
     gap: 8,
   },
   logo: {
-    height: 38,
+    height: 32,
     width: "auto",
     objectFit: "contain",
   },
@@ -89,23 +81,12 @@ const useStyles = makeStyles((theme) => ({
   drawerPaper: {
     position: "relative",
     whiteSpace: "nowrap",
-    width: drawerWidth,
-    transition: theme.transitions.create("width", {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    backgroundColor: theme.palette.background.paper,
-  },
-  drawerPaperClose: {
+    width: railWidth,
     overflowX: "hidden",
-    transition: theme.transitions.create("width", {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.leavingScreen,
-    }),
-    width: theme.spacing(7),
-    [theme.breakpoints.up("sm")]: {
-      width: theme.spacing(9),
-    },
+    backgroundColor: theme.palette.background.paper,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   appBarSpacer: {
     minHeight: "48px",
@@ -198,49 +179,34 @@ const LoggedInLayout = ({ children }) => {
     <div className={classes.root}>
       <Drawer
         variant={drawerVariant}
-        className={drawerOpen ? classes.drawerPaper : classes.drawerPaperClose}
-        classes={{
-          paper: clsx(
-            classes.drawerPaper,
-            !drawerOpen && classes.drawerPaperClose
-          ),
-        }}
-        open={drawerOpen}
+        classes={{ paper: classes.drawerPaper }}
+        open={drawerVariant === "temporary" ? drawerOpen : true}
+        onClose={() => setDrawerOpen(false)}
       >
         <div className={classes.toolbarIcon}>
-          <IconButton onClick={() => setDrawerOpen(!drawerOpen)}>
-            <ChevronLeftIcon />
-          </IconButton>
+          <img src={logo} alt="Exacom logo" className={classes.logo} />
         </div>
         <Divider />
         <List>
           <MainListItems drawerClose={drawerClose} />
         </List>
-        <Divider />
       </Drawer>
       <UserModal
         open={userModalOpen}
         onClose={() => setUserModalOpen(false)}
         userId={user?.id}
       />
-      <AppBar
-        position="absolute"
-        className={clsx(classes.appBar, drawerOpen && classes.appBarShift)}
-      >
+      <AppBar position="absolute" className={classes.appBar}>
         <Toolbar variant="dense" className={classes.toolbar}>
           <IconButton
             edge="start"
             aria-label="open drawer"
             onClick={() => setDrawerOpen(!drawerOpen)}
-            className={clsx(
-              classes.menuButton,
-              drawerOpen && classes.menuButtonHidden
-            )}
+            className={classes.menuButton}
           >
             <MenuIcon />
           </IconButton>
           <div className={classes.titleWrapper}>
-            <img src={logo} alt="Exacom logo" className={classes.logo} />
             <Typography
               component="h1"
               variant="h6"

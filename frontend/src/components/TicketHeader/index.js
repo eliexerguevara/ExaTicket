@@ -1,19 +1,31 @@
 import React from "react";
 
-import { Card, Button } from "@material-ui/core";
+import { Card, IconButton } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import TicketHeaderSkeleton from "../TicketHeaderSkeleton";
-import ArrowBackIos from "@material-ui/icons/ArrowBackIos";
+import ArrowBackIcon from "@material-ui/icons/ArrowBack";
 import { useHistory } from "react-router-dom";
 
 const useStyles = makeStyles((theme) => ({
   ticketHeader: {
     display: "flex",
-    backgroundColor: theme.palette.type === "dark" ? "#202c33" : "#eee",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: theme.palette.background.paper,
     flex: "none",
-    borderBottom: theme.palette.type === "dark" ? "1px solid #2a3942" : "1px solid rgba(0, 0, 0, 0.12)",
+    minHeight: 68,
+    padding: "0 12px",
+    borderBottom: `1px solid ${theme.palette.type === "dark" ? "#2a3942" : "rgba(0,0,0,0.08)"}`,
+    boxShadow: "none",
     [theme.breakpoints.down("sm")]: {
       flexWrap: "wrap",
+    },
+  },
+  backButton: {
+    flexShrink: 0,
+    color: theme.palette.text.secondary,
+    [theme.breakpoints.up("sm")]: {
+      display: "none",
     },
   },
 }));
@@ -31,9 +43,9 @@ const TicketHeader = ({ loading, children }) => {
         <TicketHeaderSkeleton />
       ) : (
         <Card square className={classes.ticketHeader}>
-          <Button color="primary" onClick={handleBack}>
-            <ArrowBackIos />
-          </Button>
+          <IconButton className={classes.backButton} onClick={handleBack}>
+            <ArrowBackIcon />
+          </IconButton>
           {children}
         </Card>
       )}

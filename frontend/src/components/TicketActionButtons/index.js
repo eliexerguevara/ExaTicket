@@ -20,11 +20,36 @@ const useStyles = makeStyles(theme => ({
 		flex: "none",
 		alignSelf: "center",
 		marginLeft: "auto",
-		"& > *": {
-			margin: theme.spacing(1),
+		display: "flex",
+		alignItems: "center",
+		gap: 8,
+	},
+	pillButton: {
+		borderRadius: 20,
+		textTransform: "none",
+		fontWeight: 600,
+		paddingLeft: 16,
+		paddingRight: 16,
+	},
+	resolveButton: {
+		borderRadius: 20,
+		textTransform: "none",
+		fontWeight: 600,
+		paddingLeft: 18,
+		paddingRight: 18,
+		backgroundColor: "#22c55e",
+		color: "#fff",
+		"&:hover": {
+			backgroundColor: "#16a34a",
 		},
 	},
+	roundIconButton: {
+		borderRadius: "50%",
+	},
 	aiButton: {
+		borderRadius: 20,
+		textTransform: "none",
+		fontWeight: 600,
 		backgroundColor: "#7c3aed",
 		color: "#fff",
 		"&:hover": {
@@ -143,6 +168,8 @@ const TicketActionButtons = ({ ticket }) => {
 					loading={loading}
 					startIcon={<Replay />}
 					size="small"
+					variant="outlined"
+					className={classes.pillButton}
 					onClick={e => handleUpdateTicketStatus(e, "open", user?.id)}
 				>
 					{i18n.t("messagesList.header.buttons.reopen")}
@@ -154,6 +181,8 @@ const TicketActionButtons = ({ ticket }) => {
 						loading={loading}
 						startIcon={<Replay />}
 						size="small"
+						variant="outlined"
+						className={classes.pillButton}
 						onClick={e => handleUpdateTicketStatus(e, "pending", null)}
 					>
 						{i18n.t("messagesList.header.buttons.return")}
@@ -162,12 +191,12 @@ const TicketActionButtons = ({ ticket }) => {
 						loading={loading}
 						size="small"
 						variant="contained"
-						color="primary"
+						className={classes.resolveButton}
 						onClick={handleResolveClick}
 					>
 						{i18n.t("messagesList.header.buttons.resolve")}
 					</ButtonWithSpinner>
-					<IconButton onClick={handleOpenTicketOptionsMenu}>
+					<IconButton className={classes.roundIconButton} onClick={handleOpenTicketOptionsMenu}>
 						<MoreVert />
 					</IconButton>
 					<TicketOptionsMenu
@@ -183,7 +212,7 @@ const TicketActionButtons = ({ ticket }) => {
 					loading={loading}
 					size="small"
 					variant="contained"
-					color="primary"
+					className={classes.resolveButton}
 					onClick={e => handleUpdateTicketStatus(e, "open", user?.id)}
 				>
 					{i18n.t("messagesList.header.buttons.accept")}

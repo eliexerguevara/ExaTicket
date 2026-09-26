@@ -278,7 +278,7 @@ const messages = {
         },
       },
       ticketsQueueSelect: {
-        placeholder: "Grupos de Trabajo",
+        placeholder: "Todos los grupos",
       },
       tickets: {
         toasts: {
@@ -288,16 +288,17 @@ const messages = {
           message: "Mensaje de",
         },
         tabs: {
-          open: { title: "ABIERTOS" },
+          open: { title: "Abiertos" },
           closed: { title: "Resueltos" },
           search: { title: "Buscar" },
-          groups: { title: "GRUPOS" },
+          groups: { title: "Grupos" },
         },
         search: {
           placeholder: "Buscar tickets y mensajes.",
         },
         buttons: {
-          showAll: "Todos",
+          showAll: "Mostrar todos los tickets",
+          moreFilters: "Más filtros",
         },
       },
       transferTicketModal: {

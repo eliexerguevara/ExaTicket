@@ -1,12 +1,11 @@
 import React, { useContext, useEffect, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import clsx from "clsx";
+import { useLocation, Link as RouterLink } from "react-router-dom";
 
 import ListItem from "@material-ui/core/ListItem";
 import ListItemIcon from "@material-ui/core/ListItemIcon";
-import ListItemText from "@material-ui/core/ListItemText";
-import ListSubheader from "@material-ui/core/ListSubheader";
 import Divider from "@material-ui/core/Divider";
-import { Badge } from "@material-ui/core";
+import { Badge, Tooltip, makeStyles } from "@material-ui/core";
 import DashboardOutlinedIcon from "@material-ui/icons/DashboardOutlined";
 import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import SyncAltIcon from "@material-ui/icons/SyncAlt";
@@ -30,8 +29,37 @@ import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
 import { AuthContext } from "../context/Auth/AuthContext";
 import { Can } from "../components/Can";
 
+const useRailStyles = makeStyles((theme) => ({
+  item: {
+    minHeight: 48,
+    width: 48,
+    margin: "4px auto",
+    borderRadius: 12,
+    justifyContent: "center",
+    padding: 0,
+  },
+  itemActive: {
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(37,118,210,0.25)"
+        : "rgba(37,118,210,0.12)",
+    "& $icon": {
+      color: theme.palette.primary.main,
+    },
+  },
+  icon: {
+    minWidth: 0,
+    display: "flex",
+    justifyContent: "center",
+    color: theme.palette.text.secondary,
+  },
+}));
+
 function ListItemLink(props) {
-  const { icon, primary, to, className } = props;
+  const { icon, primary, to } = props;
+  const classes = useRailStyles();
+  const location = useLocation();
+  const active = location.pathname === to;
 
   const renderLink = React.useMemo(
     () =>
@@ -42,12 +70,17 @@ function ListItemLink(props) {
   );
 
   return (
-    <li>
-      <ListItem button component={renderLink} className={className}>
-        {icon ? <ListItemIcon>{icon}</ListItemIcon> : null}
-        <ListItemText primary={primary} />
-      </ListItem>
-    </li>
+    <Tooltip title={primary} placement="right" arrow>
+      <li>
+        <ListItem
+          button
+          component={renderLink}
+          className={clsx(classes.item, active && classes.itemActive)}
+        >
+          <ListItemIcon className={classes.icon}>{icon}</ListItemIcon>
+        </ListItem>
+      </li>
+    </Tooltip>
   );
 }
 
@@ -106,10 +139,7 @@ const MainListItems = (props) => {
         perform="drawer-admin-items:view"
         yes={() => (
           <>
-            <Divider />
-            <ListSubheader inset>
-              {i18n.t("mainDrawer.listItems.administration")}
-            </ListSubheader>
+            <Divider style={{ margin: "8px 12px" }} />
             <ListItemLink
               to="/connections"
               primary={i18n.t("mainDrawer.listItems.connections")}

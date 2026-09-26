@@ -11,7 +11,6 @@ import ListItemText from "@material-ui/core/ListItemText";
 import ListItemAvatar from "@material-ui/core/ListItemAvatar";
 import Typography from "@material-ui/core/Typography";
 import Avatar from "@material-ui/core/Avatar";
-import Divider from "@material-ui/core/Divider";
 import Badge from "@material-ui/core/Badge";
 import Dialog from "@material-ui/core/Dialog";
 import DialogTitle from "@material-ui/core/DialogTitle";
@@ -50,6 +49,19 @@ const TelegramSvg = () => (
 const useStyles = makeStyles(theme => ({
 	ticket: {
 		position: "relative",
+		margin: "4px 8px",
+		borderRadius: 14,
+		backgroundColor: theme.palette.background.paper,
+		border: `1px solid ${theme.palette.type === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
+		overflow: "hidden",
+		transition: "background-color 0.15s ease",
+		"&:hover": {
+			backgroundColor: theme.palette.type === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
+		},
+		"&.Mui-selected, &.Mui-selected:hover": {
+			backgroundColor: theme.palette.type === "dark" ? "rgba(37,118,210,0.18)" : "rgba(37,118,210,0.08)",
+			border: `1px solid ${theme.palette.primary.main}`,
+		},
 	},
 
 	pendingTicket: {
@@ -648,8 +660,6 @@ const TicketListItem = ({ ticket, isTyping = false }) => {
 					</ButtonWithSpinner>
 				</DialogActions>
 			</Dialog>
-
-			<Divider variant="inset" component="li" />
 		</React.Fragment>
 	);
 };

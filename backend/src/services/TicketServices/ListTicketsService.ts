@@ -178,7 +178,12 @@ const ListTicketsService = async ({
     distinct: true,
     limit,
     offset,
-    order: [["updatedAt", "DESC"]]
+    order: [["updatedAt", "DESC"]],
+    // searchParam filters by "$contact.name$"/"$message.body$", which only
+    // resolves against the joined tables. Sequelize's default subQuery:true
+    // (triggered by the hasMany "labels" include + limit) wraps the base
+    // query without those joins, causing "Unknown column 'contact.name'".
+    subQuery: false
   });
 
   const hasMore = count > offset + tickets.length;
